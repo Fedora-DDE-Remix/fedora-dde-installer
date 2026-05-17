@@ -1,0 +1,7 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+fix_no_immutable_root_label
+cleanup_no_immutable_target

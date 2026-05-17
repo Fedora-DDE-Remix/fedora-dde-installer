@@ -1,0 +1,27 @@
+[
+    {
+        "label": "Boot",
+        "filesystem": "ext4",
+        "mountPoint": "/boot",
+        "alignStart": true,
+        "platform": [ "x86", "sw", "loongson", "arm", "loongarch64", "riscv64" ],
+        "OSVersion": [ "V25" ]
+    },
+    {
+        "label": "SWAP",
+        "filesystem": "linux-swap",
+        "mountPoint": "swap",
+        "alignStart": true,
+        "platform": [ "x86", "sw", "loongson", "arm", "loongarch64", "riscv64" ],
+        "OSVersion": [ "V25" ]
+    },
+    {
+        "label": "Root",
+        "filesystem": "ext4",
+        "mountPoint": "/",
+        "alignStart": true,
+        "usage": "100%",
+        "platform": [ "x86", "sw", "loongson", "arm", "loongarch64", "riscv64" ],
+        "OSVersion": [ "V25" ]
+    }
+]

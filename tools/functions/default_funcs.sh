@@ -216,9 +216,9 @@ unsquashfs_filesystem() {
     else
         local LIVE_DIR="$DI_LIVE_DIR_ENV/live"
         local BASE_MODULE="${LIVE_DIR}/filesystem.squashfs"
-        unsquashfs_file $BASE_MODULE
-        if [[ ${DI_OS_VERSION_ENV} == "V25" ]];then
-            unsquashfs_file "${LIVE_DIR}/filesystem-extra.squashfs"
+        unsquashfs_file "$BASE_MODULE" /target
+        if [[ ${DI_OS_VERSION_ENV} == "V25" && -f "${LIVE_DIR}/filesystem-extra.squashfs" ]];then
+            unsquashfs_file "${LIVE_DIR}/filesystem-extra.squashfs" /target
         fi
 
         # 可变安装删除ostree仓库

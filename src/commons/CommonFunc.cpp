@@ -2178,7 +2178,9 @@ QStringList CommonFunc::getPartitionMountPoints(const SLVMInfo &free)
 {
     QString osVersion = CommonFunc::getCurrentOsVersion();
     QStringList reset;
-    if (osVersion == "V20") {
+    if (CommonFunc::getSettingsBool("DI_NO_IMMUTABLE_INSTALL")) {
+        reset = qstringSplitToQStringList("/;/boot;/home;/tmp;/var;/srv;/opt;/usr/local", ";");
+    } else if (osVersion == "V20") {
         reset = getSettingsStringList("DI_PARTITION_MOUNT_POINT_CONFIG");
     } else {
         reset = getSettingsStringList("DI_PARTITION_MOUNT_POINT_CONFIG", osVersion);
@@ -2200,7 +2202,9 @@ QStringList CommonFunc::getPartitionMountPoints(const SPartitionInfo &free)
 {
     QString osVersion = CommonFunc::getCurrentOsVersion();
     QStringList reset;
-    if (osVersion == "V20") {
+    if (CommonFunc::getSettingsBool("DI_NO_IMMUTABLE_INSTALL")) {
+        reset = qstringSplitToQStringList("/;/boot;/home;/tmp;/var;/srv;/opt;/usr/local", ";");
+    } else if (osVersion == "V20") {
         reset = getSettingsStringList("DI_PARTITION_MOUNT_POINT_CONFIG");
     } else {
         reset = getSettingsStringList("DI_PARTITION_MOUNT_POINT_CONFIG", osVersion);
@@ -2232,7 +2236,7 @@ QString CommonFunc::labelToMountPoint(const QString &label)
         reset = "/boot/efi";
     } else if (label == gBootLabel) {
         reset = "/boot";
-    } else if (label == gRootaLabel) {
+    } else if (label == gRootaLabel || label == gRootLabel) {
         reset = "/";
     } else if (label == gSWAPLabel) {
         reset = "swap";
@@ -2702,7 +2706,7 @@ QString CommonFunc::getPartitionLabel(const SPartitionInfo &part)
         }
     }
     else if (part.mountPoint == "/") {
-        label = gRootaLabel;
+        label = CommonFunc::getSettingsBool("DI_IMMUTABLE_SYSTEM") ? gRootaLabel : gRootLabel;
 
     } else if (part.mountPoint == "/boot") {
         label = gBootLabel;
@@ -2770,7 +2774,7 @@ QString CommonFunc::getPartitionLabel(const SLVMInfo &part)
         }
     }
     else if (part.mountPoint == "/") {
-        label = gRootaLabel;
+        label = CommonFunc::getSettingsBool("DI_IMMUTABLE_SYSTEM") ? gRootaLabel : gRootLabel;
 
     } else if (part.mountPoint == "/boot") {
         label = gBootLabel;

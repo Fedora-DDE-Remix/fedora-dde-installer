@@ -348,7 +348,7 @@ generate_cryttab() {
             local use_initramfs=""
             if is_full_disk_mode; then
                 use_initramfs="initramfs,"
-            elif [ -n "$(echo -n \"$(lsblk ${crypt_part} -no LABEL | grep 'Roota')\" | tr -d ' ' | tr -d '"')" ]; then
+            elif [ -n "$(echo -n \"$(lsblk ${crypt_part} -no LABEL | grep -E '^(Roota|Root)$')\" | tr -d ' ' | tr -d '"')" ]; then
                 use_initramfs="initramfs,"
             fi
 

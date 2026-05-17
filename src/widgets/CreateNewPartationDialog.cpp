@@ -256,7 +256,7 @@ bool CreateNewPartitionDialog::limitEditorSizeByMountPoint()
     if (gBootLabel == partitionLabel) {
         minSize = qMax((qint64)CommonFunc::getSettingsInt("DI_BOOT_SIZE_CONFIG"), ghostMinSize);
         useMinSize = true;
-    } else if (gRootaLabel == partitionLabel) {
+    } else if (gRootLabel == partitionLabel || gRootaLabel == partitionLabel) {
         minSize = CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG");
         if (m_newPartitionInfo.deviceSize > gDiskThreshold) {
             minSize = static_cast<int>(floor(m_newPartitionInfo.deviceSize * 0.1));
@@ -355,4 +355,3 @@ bool CreateNewPartitionDialog::getFormatPartitionCheckStatus()
 {
     return m_formatPartition->isChecked();
 }
-

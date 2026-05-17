@@ -795,7 +795,11 @@ EOF
     sed -i "s/# \(${tmp_locale_all}[\. ]UTF-8.*$\)/\1/g" /etc/locale.gen
 
     # Re-generate localisation files.
-    deepin-immutable-ctl admin exec /usr/sbin/locale-gen
+    if is_ostree_system; then
+        deepin-immutable-ctl admin exec /usr/sbin/locale-gen
+    else
+        /usr/sbin/locale-gen
+    fi
 
     # Check locale
     if ls /usr/share/i18n/locales | grep -q "\<${tmp_locale_all}\>"; then
@@ -809,6 +813,10 @@ enable_ice_restore() {
     local restore_white_list
     enable_restore=$(installer_get "DI_ENABLE_ICE_RESTORE")
     if [ "${enable_restore}" = "true" ]; then
+        if ! is_ostree_system; then
+            warning "ice restore is only available on immutable system"
+            return 0
+        fi
         deepin-immutable-writable enable -a -c -y || warning "ice restore enable failed"
         restore_white_list=$(installer_get "DI_ICE_RESTORE_WHITELIST")
         if [ -n "${restore_white_list}" ]; then

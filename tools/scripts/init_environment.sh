@@ -20,7 +20,7 @@ export DI_OEM_DIR=$DI_LIVE_DIR_ENV/oem/
 export DI_TARGET_LIVE_DIR_ENV=/media/live/mount/medium
 
 export DI_OS_VERSION_ENV="V$(cat /etc/deepin-version | grep Version | awk -F= '{print $2}')"
-export DI_REPO_BASE_NAME_ENV=$(cat /etc/immutable.conf/base-name)
+export DI_REPO_BASE_NAME_ENV=$([ -f /etc/immutable.conf/base-name ] && cat /etc/immutable.conf/base-name || true)
 
 echo "DI_REPO_BASE_NAME_ENV=$DI_REPO_BASE_NAME_ENV"
 echo "DI_HOME_BIN_ENV=$DI_HOME_BIN_ENV"

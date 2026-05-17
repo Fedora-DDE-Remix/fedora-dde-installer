@@ -420,7 +420,7 @@ qint64 PartitionFullDiskManager::getConfigPartitionSize(const qint64 devSize, co
         reset = CommonFunc::getSettingsInt("DI_EFI_SIZE_CONFIG");
     } else if (label == gBootLabel) {
         reset =  CommonFunc::getSettingsInt("DI_BOOT_SIZE_CONFIG");
-    } else if (label == gRootaLabel || label == gRootbLabel) {
+    } else if (label == gRootLabel || label == gRootaLabel || label == gRootbLabel) {
         reset =  CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG");
     } else if (label == gBackupLabel) {
         reset =  CommonFunc::getSettingsInt("DI_RECOVERY_BASE_SIZE_CONFIG");
@@ -572,7 +572,7 @@ qint64 PartitionFullDiskManager::defaultPartitionSize(const qint64 devSize, cons
     } else if (label == gBootLabel) {
         reset =  CommonFunc::getSettingsInt("DI_BOOT_SIZE_CONFIG");
 
-    } else if (label == gRootaLabel || label == gRootbLabel) {
+    } else if (label == gRootLabel || label == gRootaLabel || label == gRootbLabel) {
         reset =  CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG") + m_rootaPartitionResize;
 
     } else if (label == gBackupLabel) {
@@ -601,7 +601,7 @@ void PartitionFullDiskManager::saveUserData()
                 in.mountPoint = "/boot/efi";
             } else if (in.label == gBootLabel) {
                 in.mountPoint = "/boot";
-            } else if (in.label == gRootaLabel) {
+            } else if (in.label == gRootLabel || in.label == gRootaLabel) {
                 in.mountPoint = "/";
             } else if (in.label == gBackupLabel) {
                 in.mountPoint = "/recovery";
@@ -637,7 +637,7 @@ void PartitionFullDiskManager::saveUserData()
                 lvmInfoItem.mountPoint = "/boot/efi";
             } else if (lvmInfoItem.label == gBootLabel) {
                 lvmInfoItem.mountPoint = "/boot";
-            } else if (lvmInfoItem.label == gRootaLabel) {
+            } else if (lvmInfoItem.label == gRootLabel || lvmInfoItem.label == gRootaLabel) {
                 lvmInfoItem.mountPoint = "/";
             } else if (lvmInfoItem.label == gBackupLabel) {
                 lvmInfoItem.mountPoint = "/recovery";
@@ -855,4 +855,3 @@ bool PartitionFullDiskManager::checkSaveUserDataOSVersionMatch(const QString &de
 
     return isVersionMatch;
 }
-

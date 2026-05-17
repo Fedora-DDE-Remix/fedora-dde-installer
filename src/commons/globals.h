@@ -72,6 +72,7 @@ const qint64 gEFIBackupSectors = 33;
 
 const QString gEFILabel = "EFI";
 const QString gBootLabel = "Boot";
+const QString gRootLabel = "Root";
 const QString gRootaLabel = "Roota";
 const QString gRootbLabel = "Rootb";
 const QString gBackupLabel = "Backup";

@@ -190,7 +190,7 @@ bool CreateNewLVMDialog::limitEditorSizeByMountPoint()
     if (gBootLabel == CommonFunc::getPartitionLabel(m_newLVMInfo)) {
         minSize = qMax((qint64)CommonFunc::getSettingsInt("DI_BOOT_SIZE_CONFIG"), ghostMinSize);
         useMinSize = true;
-    } else if (gRootaLabel == CommonFunc::getPartitionLabel(m_newLVMInfo)) {
+    } else if (gRootLabel == CommonFunc::getPartitionLabel(m_newLVMInfo) || gRootaLabel == CommonFunc::getPartitionLabel(m_newLVMInfo)) {
         minSize = CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG");
         useMinSize = true;
     } else if (gEFILabel == CommonFunc::getPartitionLabel(m_newLVMInfo)) {

@@ -552,7 +552,7 @@ void FullDiskPartitionFrame::initDiskData(const QList<SDeviceInfo> &devs)
     m_labelDiskName->setToolTip(m_dev.name);
     m_labelDiskPath->setText(m_dev.device);
     m_labelDiskSize->setText(QString::number(totalSize) + "GiB");
-    m_btnKeepData->setVisible(!CommonFunc::isGhost());
+    m_btnKeepData->setVisible(!CommonFunc::isGhost() && CommonFunc::getSettingsBool("DI_SAVE_USER_DATA_LOAD"));
     if(m_modeGroup->checkedId() != -1) {
         int id = m_modeGroup->checkedId();
         m_modeGroup->setExclusive(false);

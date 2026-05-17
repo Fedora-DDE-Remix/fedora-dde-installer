@@ -20,17 +20,33 @@
 #include <QtConcurrent>
 #include <QFutureWatcher>
 #include <QScrollArea>
+#include <QStringList>
 #include <DSpinner>
 #include <DMessageManager>
 
 static const QString SENIOR_FRAME = "SENIORFRAME";
 static const QSize GHOST_TIPSIZE = QSize(20, 20);
+static const QStringList NO_IMMUTABLE_PROFILE_KEYS = {
+    "DI_IMMUTABLE_SYSTEM",
+    "DI_PART_POLICY_FILE",
+    "DI_SAVE_USER_DATA_LOAD",
+    "DI_IS_SAVE_AUTHORIZED_DATA_CONFIG",
+    "DI_IS_INIT_RECOVERY",
+    "DI_VALID_DEVICE_MIN_SIZE_CONFIG",
+    "DI_DEVICE_MIN_SIZE_CONFIG",
+    "DI_BOOT_SIZE_CONFIG",
+    "DI_ROOTA_SIZE_CONFIG",
+    "DI_SWAP_MAX_SIZE_CONFIG",
+    "DI_PERSISTENT_SIZE_CONFIG",
+    "DI_DATA_MIN_SIZE_CONFIG"
+};
 
 PartitionNavFrame::PartitionNavFrame(QWidget *parent):
     FramePluginInterface (parent)
 {
     m_uimgCheckResult.result = false;
     m_frameName = gFramePartition;
+    cacheInstallProfileDefaults();
     //分区界面回退按钮特殊处理
     m_backBnt->disconnect(SIGNAL(clicked()));
     m_centerWidget = new QStackedWidget(this);
@@ -72,10 +88,14 @@ PartitionNavFrame::PartitionNavFrame(QWidget *parent):
     m_partLabel = new DLabel;
     m_partLabel->setFixedWidth(gpartitionBntWidth);
     DFontSizeManager::instance()->bind(m_partLabel, DFontSizeManager::T6, QFont::DemiBold);
+    m_noImmutableCheckBox = new DCheckBox(this);
+    m_noImmutableCheckBox->setFixedWidth(gpartitionBntWidth);
+    m_noImmutableCheckBox->setVisible(isNoImmutableOptionAvailable());
     QVBoxLayout *optionButtonLayout = new QVBoxLayout;
     optionButtonLayout->setSpacing(CommonFunc::isBigScreen() ? gitemSpacing : glayoutSpacing);
     optionButtonLayout->setContentsMargins(0, 0, 0, 0);
     optionButtonLayout->addWidget(m_partLabel, 0, Qt::AlignHCenter);
+    optionButtonLayout->addWidget(m_noImmutableCheckBox, 0, Qt::AlignHCenter);
     optionButtonLayout->addWidget(m_fullDiskPartitionBnt, 0, Qt::AlignHCenter);
     optionButtonLayout->addWidget(m_customPartitionBnt, 0, Qt::AlignHCenter);
     optionButtonLayout->addWidget(m_seniorPartitionBnt, 0, Qt::AlignHCenter);
@@ -264,12 +284,20 @@ void PartitionNavFrame::initConnection()
                 m_imgSelect->setVisible(false);
                 m_partLabel->setVisible(false);
                 clearGhostSetting();
+                m_noImmutableCheckBox->setVisible(isNoImmutableOptionAvailable());
             } else {
                 m_imgSelect->setVisible(true);
                 m_partLabel->setVisible(true);
+                m_noImmutableCheckBox->setChecked(false);
+                m_noImmutableCheckBox->setVisible(false);
             }
             m_scrollAreaContentWidget->adjustSize();
         }
+    });
+
+    connect(m_noImmutableCheckBox, &DCheckBox::toggled, this, [=]{
+        applyNoImmutableChoice();
+        PartitionOperateManager::instance()->resetDisk();
     });
 }
 
@@ -318,6 +346,8 @@ void PartitionNavFrame::updateTs()
     m_modeBox->button(0)->setText(tr("Install  ISO"));
     m_modeBox->button(1)->setText(tr("Install uimg"));
 
+    m_noImmutableCheckBox->setText(tr("Install without immutable system"));
+
     m_fullDiskPartitionBnt->setInstallTypeText(::QObject::tr("Full Disk (Recommended)"));
     m_fullDiskPartitionBnt->setIntroductionText(::QObject::tr("The system will be installed on the disk you selected. All data on the selected disk (including system and data partitions) will be formatted."));
 
@@ -340,6 +370,46 @@ void PartitionNavFrame::updateTs()
     }
 
     QTimer::singleShot(100, m_scrollAreaContentWidget, &QWidget::adjustSize);
+}
+
+bool PartitionNavFrame::isNoImmutableOptionAvailable() const
+{
+    return CommonFunc::getCurrentOsVersion() == "V25" && CommonFunc::getSettingsBool("DI_NO_IMMUTABLE_LOAD");
+}
+
+void PartitionNavFrame::cacheInstallProfileDefaults()
+{
+    for (const QString &key : NO_IMMUTABLE_PROFILE_KEYS) {
+        m_installProfileDefaults.insert(key, CommonFunc::getSettingsString(key));
+    }
+}
+
+void PartitionNavFrame::applyNoImmutableChoice()
+{
+    const bool enabled = m_noImmutableCheckBox && m_noImmutableCheckBox->isChecked();
+    CommonFunc::setSettingsValue("DI_NO_IMMUTABLE_INSTALL", enabled);
+
+    if (!enabled) {
+        for (auto it = m_installProfileDefaults.constBegin(); it != m_installProfileDefaults.constEnd(); ++it) {
+            CommonFunc::setSettingsValue(it.key(), it.value());
+        }
+        return;
+    }
+
+    const QString policyFile = QString("%1/settings/full_disk_policy_no_immutable.json")
+            .arg(CommonFunc::getSystemEnv(DI_CONFIG_DIR_ENV));
+    CommonFunc::setSettingsValue("DI_IMMUTABLE_SYSTEM", false);
+    CommonFunc::setSettingsValue("DI_PART_POLICY_FILE", policyFile);
+    CommonFunc::setSettingsValue("DI_SAVE_USER_DATA_LOAD", false);
+    CommonFunc::setSettingsValue("DI_IS_SAVE_AUTHORIZED_DATA_CONFIG", false);
+    CommonFunc::setSettingsValue("DI_IS_INIT_RECOVERY", false);
+    CommonFunc::setSettingsValue("DI_VALID_DEVICE_MIN_SIZE_CONFIG", 32);
+    CommonFunc::setSettingsValue("DI_DEVICE_MIN_SIZE_CONFIG", 40);
+    CommonFunc::setSettingsValue("DI_BOOT_SIZE_CONFIG", 2048);
+    CommonFunc::setSettingsValue("DI_ROOTA_SIZE_CONFIG", 32768);
+    CommonFunc::setSettingsValue("DI_SWAP_MAX_SIZE_CONFIG", 8192);
+    CommonFunc::setSettingsValue("DI_PERSISTENT_SIZE_CONFIG", 0);
+    CommonFunc::setSettingsValue("DI_DATA_MIN_SIZE_CONFIG", "0%");
 }
 
 void PartitionNavFrame::clearGhostSetting()
@@ -578,6 +648,8 @@ void PartitionNavFrame::initBtnConnect(const OptionButton &pOptionButton)
             return;
         }
 
+        applyNoImmutableChoice();
+
         if(m_modeBox->checkedId() == 1) {
             if (m_uimgCheckResult.uimgFilePath.isEmpty() || !QFileInfo::exists(m_uimgCheckResult.uimgFilePath)) {
                 DMessageManager::instance()->setContentMargens(this, QMargins(0, 0, 0, 10));
@@ -643,4 +715,3 @@ void PartitionNavFrame::initBtnConnect(const OptionButton &pOptionButton)
         }
     });
 }
-

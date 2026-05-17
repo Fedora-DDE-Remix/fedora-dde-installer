@@ -97,7 +97,7 @@ void MultipleDiskPartitionFrame::initDeviceInfo(const QList<SDeviceInfo> &infos)
     m_dataDevCombo->clear();
     m_dataDevCombo->addItem(tr("Unselect"));
     //m_dataDevCombo->setEnabled(false);
-    m_btnKeepData->setVisible(!CommonFunc::isGhost());
+    m_btnKeepData->setVisible(!CommonFunc::isGhost() && CommonFunc::getSettingsBool("DI_SAVE_USER_DATA_LOAD"));
     if(m_modeGroup->checkedId() != -1) {
         int id = m_modeGroup->checkedId();
         m_modeGroup->setExclusive(false);
@@ -1008,4 +1008,3 @@ void MultipleDiskPartitionFrame::showEvent(QShowEvent *event)
     setFocus();
     QWidget::showEvent(event);
 }
-

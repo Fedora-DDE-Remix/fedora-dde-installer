@@ -180,6 +180,11 @@ function deploy_persistent()
 # 系统安装完成并完成所有配置后，执行一次系统备份增加一个回滚启动项
 function first_backup()
 {
+    if ! is_ostree_system; then
+        info "skip first backup for non-immutable system"
+        return 0
+    fi
+
     local language=$(installer_get "DI_LOCALE")
     
     if [ -z "$language" ]; then

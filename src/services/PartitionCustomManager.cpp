@@ -225,7 +225,7 @@ SPartitionInfo PartitionCustomManager::getRootaPartitionInfo(qint64 size, const 
     info.deviceSize = dev.size;
     info.filesystem = "ext4";
     info.mountPoint = "/";
-    info.label = gRootaLabel;
+    info.label = CommonFunc::getSettingsBool("DI_IMMUTABLE_SYSTEM") ? gRootaLabel : gRootLabel;
     info.isStartPoint = true;
     info.sectorSize = dev.sectors;
     info.phySectorSize = dev.physectors;
