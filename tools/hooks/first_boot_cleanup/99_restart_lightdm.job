@@ -1,0 +1,48 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+# 用于后配置界面显示100%进度
+installer_set DI_INSTALLER_STATUS "100"
+
+# 界面会设置DI_INSTALLER_STATUS=101，这里对界面的行为做检测，得到界面反馈后执行后面的卸载操作
+# 如果界面没有反馈则重复检测DI_INSTALLER_STATUS字段10次后，跳出循环继续后面的操作
+LOOPNUM=0
+DI_INSTALLER_STATUS_MODIFY=$(installer_get "DI_INSTALLER_STATUS")
+while [ x"${DI_INSTALLER_STATUS_MODIFY}" != "x101" ]; do
+    let LOOPNUM++ || true
+    if [ ${LOOPNUM} -gt 10 ]; then
+        warning "DI_INSTALLER_STATUS is not reset as 101 by ui, we has wait 10s... now to do next step!"
+        break
+    fi
+    DI_INSTALLER_STATUS_MODIFY=$(installer_get "DI_INSTALLER_STATUS")
+    sleep 1
+done
+
+crypt_log "/var/log/deepin-installer"
+
+# 以下是存在后配置情况下的最后一步。卸载安装器必须放到条件判断内部，因为如果先卸载安装器installer_get可能就不存在了
+if [ "x$(installer_get "DI_REBOOT_AFTER_SETUP")" = "xtrue" ]; then
+    apt-get -y purge deepin-installer || warning "uninstall deepin-installer failed"
+    apt-get -y autoremove || warning "autoremove failed"
+    first_backup
+else
+    apt-get -y purge deepin-installer || warning "uninstall deepin-installer failed"
+    apt-get -y autoremove || warning "autoremove failed"
+    # if is_community; then
+    #     ## 社区版启动treeland
+    #     systemctl start replace-lightdm-with-ddm.service
+    # else
+        ## 有后配置情况下让第一次登陆后的主机名生效
+        systemctl restart systemd-hostnamed || warning "systemctl restart systemd-hostnamed failed"
+        ## 解决蓝牙主机名问题
+        setup_bluetooth_service
+        first_backup
+        ## 重启lightdm
+        systemctl restart lightdm.service
+    # fi
+fi
+
+
+

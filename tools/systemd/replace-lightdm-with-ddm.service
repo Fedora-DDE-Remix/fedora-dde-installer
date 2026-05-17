@@ -1,0 +1,7 @@
+[Unit]
+Description=Replace LightDM with DDM
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl disable --now lightdm.service
+ExecStart=/usr/bin/systemctl enable --now ddm.service

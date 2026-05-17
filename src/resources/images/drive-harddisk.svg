@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="122px" height="140px" viewBox="0 0 122 140" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>磁盘</title>
+    <defs>
+        <filter x="-21.1%" y="-17.9%" width="142.2%" height="135.8%" filterUnits="objectBoundingBox" id="filter-1">
+            <feOffset dx="0" dy="1" in="SourceAlpha" result="shadowOffsetOuter1"></feOffset>
+            <feGaussianBlur stdDeviation="5" in="shadowOffsetOuter1" result="shadowBlurOuter1"></feGaussianBlur>
+            <feColorMatrix values="0 0 0 0 0   0 0 0 0 0.913568027   0 0 0 0 0.618155119  0 0 0 0.192830866 0" type="matrix" in="shadowBlurOuter1" result="shadowMatrixOuter1"></feColorMatrix>
+            <feMerge>
+                <feMergeNode in="shadowMatrixOuter1"></feMergeNode>
+                <feMergeNode in="SourceGraphic"></feMergeNode>
+            </feMerge>
+        </filter>
+        <linearGradient x1="102.549264%" y1="57.6822305%" x2="-2.65228894%" y2="57.6822305%" id="linearGradient-2">
+            <stop stop-color="#0067BC" offset="0%"></stop>
+            <stop stop-color="#30EA7F" offset="4.57146722%"></stop>
+            <stop stop-color="#00D887" offset="9.93130604%"></stop>
+            <stop stop-color="#00B160" offset="88.9446523%"></stop>
+            <stop stop-color="#00C165" offset="93.7925209%"></stop>
+            <stop stop-color="#008CBD" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="100%" y1="56.4295561%" x2="0%" y2="56.4295561%" id="linearGradient-3">
+            <stop stop-color="#FFFFFF" stop-opacity="0.5" offset="0%"></stop>
+            <stop stop-color="#FFFFFF" stop-opacity="0.9" offset="9.93588454%"></stop>
+            <stop stop-color="#FFFFFF" stop-opacity="0.7" offset="52.3560063%"></stop>
+            <stop stop-color="#FFFFFF" stop-opacity="0.9" offset="87.6484117%"></stop>
+            <stop stop-color="#FFFFFF" stop-opacity="0.5" offset="100%"></stop>
+        </linearGradient>
+        <radialGradient cx="48.2392027%" cy="19.1031265%" fx="48.2392027%" fy="19.1031265%" r="78.6539217%" gradientTransform="translate(0.482392,0.191031),scale(0.205882,1.000000),rotate(90.000000),scale(1.000000,3.580713),translate(-0.482392,-0.191031)" id="radialGradient-4">
+            <stop stop-color="#7CFFFE" offset="0%"></stop>
+            <stop stop-color="#D6CDE6" offset="100%"></stop>
+        </radialGradient>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="100%" id="linearGradient-5">
+            <stop stop-color="#0174FF" offset="0%"></stop>
+            <stop stop-color="#01C2FF" offset="50.8499801%"></stop>
+            <stop stop-color="#0056FF" offset="100%"></stop>
+        </linearGradient>
+        <radialGradient cx="50%" cy="50%" fx="50%" fy="50%" r="50%" id="radialGradient-6">
+            <stop stop-color="#B0FF58" offset="0%"></stop>
+            <stop stop-color="#31CF00" offset="100%"></stop>
+        </radialGradient>
+    </defs>
+    <g id="1070" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="全盘安装-调整系统空间2" transform="translate(-898.000000, -318.000000)">
+            <g id="Group-2" transform="translate(908.000000, 327.000000)" filter="url(#filter-1)">
+                <path d="M0,18.0192342 C0,8.06748596 8.04635017,0 18.0007574,0 L83.9992426,0 C93.9407864,0 102,8.07225789 102,18.0192342 L102,107.992801 C102,111.310485 99.3241766,114 96.0002388,114 L5.99976121,114 C2.68618459,114 0,111.311164 0,107.992801 L0,18.0192342 Z" id="Rectangle-1" fill="url(#linearGradient-2)"></path>
+                <path d="M0,95.9998299 C0,89.3725068 5.3760958,84 12.0006371,84 L89.9993629,84 C96.6271318,84 102,89.3989605 102,95.9998299 L102,109.471002 C102,110.315444 101.348648,111 100.478958,111 L1.52104166,111 C0.680993548,111 0,110.332581 0,109.471002 L0,95.9998299 Z" id="Rectangle-3" fill="url(#linearGradient-3)"></path>
+                <path d="M0,109.5 C0,103.70101 4.71510372,99 10.4839838,99 L91.5160162,99 C97.1131557,99 101.685859,103.403859 101.984487,108.924997 L102,109.5 C102,115.29899 97.2848963,120 91.5160162,120 L10.4839838,120 C4.88684426,120 0.314140746,115.596141 0.0155128895,110.075003 L0,109.5 Z" id="Rectangle-1" fill="url(#radialGradient-4)"></path>
+                <g id="Group" transform="translate(60.000000, 105.000000)" fill="url(#linearGradient-5)">
+                    <path d="M30,1.48616695 C30,0.756578203 30.5497685,0.149780749 31.2367541,0.0239441393 L31.5,0 C32.3284271,0 33,0.647257805 33,1.48616695 L33,7.51383305 C33,8.2434218 32.4502315,8.85021925 31.7632459,8.97605586 L31.5,9 C30.6715729,9 30,8.3527422 30,7.51383305 L30,1.48616695 Z M24,1.48616695 C24,0.756578203 24.5497685,0.149780749 25.2367541,0.0239441393 L25.5,0 C26.3284271,0 27,0.647257805 27,1.48616695 L27,7.51383305 C27,8.2434218 26.4502315,8.85021925 25.7632459,8.97605586 L25.5,9 C24.6715729,9 24,8.3527422 24,7.51383305 L24,1.48616695 Z M18,1.48616695 C18,0.756578203 18.5497685,0.149780749 19.2367541,0.0239441393 L19.5,0 C20.3284271,0 21,0.647257805 21,1.48616695 L21,7.51383305 C21,8.2434218 20.4502315,8.85021925 19.7632459,8.97605586 L19.5,9 C18.6715729,9 18,8.3527422 18,7.51383305 L18,1.48616695 Z M12,1.48616695 C12,0.756578203 12.5497685,0.149780749 13.2367541,0.0239441393 L13.5,0 C14.3284271,0 15,0.647257805 15,1.48616695 L15,7.51383305 C15,8.2434218 14.4502315,8.85021925 13.7632459,8.97605586 L13.5,9 C12.6715729,9 12,8.3527422 12,7.51383305 L12,1.48616695 Z M6,1.48616695 C6,0.756578203 6.54976852,0.149780749 7.23675412,0.0239441393 L7.5,0 C8.32842712,0 9,0.647257805 9,1.48616695 L9,7.51383305 C9,8.2434218 8.45023148,8.85021925 7.76324588,8.97605586 L7.5,9 C6.67157288,9 6,8.3527422 6,7.51383305 L6,1.48616695 Z M0,1.48616695 C0,0.756578203 0.549768519,0.149780749 1.23675412,0.0239441393 L1.5,0 C2.32842712,0 3,0.647257805 3,1.48616695 L3,7.51383305 C3,8.2434218 2.45023148,8.85021925 1.76324588,8.97605586 L1.5,9 C0.671572875,9 0,8.3527422 0,7.51383305 L0,1.48616695 Z" id="Combined-Shape"></path>
+                </g>
+                <path d="M12,114 C14.4852814,114 16.5,111.985281 16.5,109.5 C16.5,107.014719 14.4852814,105 12,105 C9.51471863,105 7.5,107.014719 7.5,109.5 C7.5,111.985281 9.51471863,114 12,114 Z" id="Oval" fill="url(#radialGradient-6)"></path>
+            </g>
+        </g>
+    </g>
+</svg>

@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# 导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+
+## 准备定制用户
+prepare_customize_user
+## 定制用户
+customize_user
+## 设置用户
+setup_username
+## 设置密码
+setup_password
+## 设置主机名
+setup_hostname
+## 设置快速登录
+setup_quick_login

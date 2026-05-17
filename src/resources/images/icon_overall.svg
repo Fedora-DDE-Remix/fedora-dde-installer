@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64px" height="64px" viewBox="0 0 64 64" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>全盘</title>
+    <defs>
+        <linearGradient x1="57.5894467%" y1="102.693322%" x2="57.5894467%" y2="2.53449962%" id="linearGradient-1">
+            <stop stop-color="#515151" offset="0%"></stop>
+            <stop stop-color="#7E7E7E" offset="100%"></stop>
+        </linearGradient>
+        <path d="M25.5,34.8 L27.3,34.8 C27.4656854,34.8 27.6,34.9343146 27.6,35.1 L27.6,39.3 C27.6,39.4656854 27.4656854,39.6 27.3,39.6 L25.5,39.6 C25.3343146,39.6 25.2,39.4656854 25.2,39.3 L25.2,35.1 C25.2,34.9343146 25.3343146,34.8 25.5,34.8 Z M29.1,34.8 L30.9,34.8 C31.0656854,34.8 31.2,34.9343146 31.2,35.1 L31.2,39.3 C31.2,39.4656854 31.0656854,39.6 30.9,39.6 L29.1,39.6 C28.9343146,39.6 28.8,39.4656854 28.8,39.3 L28.8,35.1 C28.8,34.9343146 28.9343146,34.8 29.1,34.8 Z M32.7,34.8 L34.5,34.8 C34.6656854,34.8 34.8,34.9343146 34.8,35.1 L34.8,39.3 C34.8,39.4656854 34.6656854,39.6 34.5,39.6 L32.7,39.6 C32.5343146,39.6 32.4,39.4656854 32.4,39.3 L32.4,35.1 C32.4,34.9343146 32.5343146,34.8 32.7,34.8 Z" id="path-2"></path>
+        <filter x="0.0%" y="0.0%" width="100.0%" height="100.0%" filterUnits="objectBoundingBox" id="filter-3">
+            <feOffset dx="0" dy="0" in="SourceAlpha" result="shadowOffsetOuter1"></feOffset>
+            <feColorMatrix values="0 0 0 0 1   0 0 0 0 1   0 0 0 0 1  0 0 0 0.3 0" type="matrix" in="shadowOffsetOuter1"></feColorMatrix>
+        </filter>
+        <path d="M7.2,39.6 C8.5254834,39.6 9.6,38.5254834 9.6,37.2 C9.6,35.8745166 8.5254834,34.8 7.2,34.8 C5.8745166,34.8 4.8,35.8745166 4.8,37.2 C4.8,38.5254834 5.8745166,39.6 7.2,39.6 Z" id="path-4"></path>
+        <filter x="-20.8%" y="-20.8%" width="141.7%" height="141.7%" filterUnits="objectBoundingBox" id="filter-5">
+            <feOffset dx="-2" dy="-2" in="SourceAlpha" result="shadowOffsetInner1"></feOffset>
+            <feComposite in="shadowOffsetInner1" in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="shadowInnerInner1"></feComposite>
+            <feColorMatrix values="0 0 0 0 0.191847778   0 0 0 0 0.912414966   0 0 0 0 0.103665518  0 0 0 0.5 0" type="matrix" in="shadowInnerInner1"></feColorMatrix>
+        </filter>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="100%" id="linearGradient-6">
+            <stop stop-color="#FFFFFF" offset="0%"></stop>
+            <stop stop-color="#D7D8D9" offset="87.3104922%"></stop>
+            <stop stop-color="#F2F2F2" offset="100%"></stop>
+        </linearGradient>
+    </defs>
+    <g id="安装器v25" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="安装类型-ISO镜像安装" transform="translate(-680, -388)">
+            <g id="编组-2" transform="translate(660, 368)">
+                <g id="全盘" transform="translate(20, 20)">
+                    <rect id="矩形" x="0" y="0" width="64" height="64"></rect>
+                    <g id="icon/custom" transform="translate(8, 8)">
+                        <rect id="矩形" x="0" y="-3.55271368e-15" width="48" height="48"></rect>
+                        <g id="Group" transform="translate(4.8, 2.4)">
+                            <rect id="矩形" stroke-opacity="0.2" stroke="#343434" stroke-width="0.96" fill="url(#linearGradient-1)" x="0.48" y="0.48" width="37.44" height="42.24" rx="3.84"></rect>
+                            <rect id="矩形" stroke-opacity="0.2" stroke="#000000" stroke-width="0.96" fill="#464646" x="0.48" y="31.68" width="37.44" height="11.04" rx="3.84"></rect>
+                            <g id="Combined-Shape" opacity="0.5">
+                                <use fill="black" fill-opacity="1" filter="url(#filter-3)" xlink:href="#path-2"></use>
+                                <use fill="#000000" fill-rule="evenodd" xlink:href="#path-2"></use>
+                            </g>
+                            <g id="Oval">
+                                <use fill="#BAFF76" fill-rule="evenodd" xlink:href="#path-4"></use>
+                                <use fill="black" fill-opacity="1" filter="url(#filter-5)" xlink:href="#path-4"></use>
+                                <path stroke="#54D800" stroke-width="0.3" d="M7.2,34.95 C7.82132034,34.95 8.38382034,35.2018398 8.79099026,35.6090097 C9.19816017,36.0161797 9.45,36.5786797 9.45,37.2 C9.45,37.8213203 9.19816017,38.3838203 8.79099026,38.7909903 C8.38382034,39.1981602 7.82132034,39.45 7.2,39.45 C6.57867966,39.45 6.01617966,39.1981602 5.60900974,38.7909903 C5.20183983,38.3838203 4.95,37.8213203 4.95,37.2 C4.95,36.5786797 5.20183983,36.0161797 5.60900974,35.6090097 C6.01617966,35.2018398 6.57867966,34.95 7.2,34.95 Z" stroke-linejoin="square"></path>
+                            </g>
+                        </g>
+                        <polygon id="路径备份" stroke-opacity="0.1" stroke="#000000" stroke-width="0.96" fill="url(#linearGradient-6)" points="27.2 12 27.2 21.6 32.4 21.6 24 30 15.6 21.6 20.8 21.6 20.8 12"></polygon>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

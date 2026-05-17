@@ -1,0 +1,13 @@
+{
+    "CPU": "arm",
+    "cryptSetup": false,
+    "disk": "",
+    "initRecovery": false,
+    "installTime": "00:00:00",
+    "installType": 0,
+    "installerVersion": "",
+    "lvmFullDisk": false,
+    "rootSize": 0,
+    "saveData": false,
+    "swapSize": 0
+}

@@ -1,0 +1,44 @@
+#!/bin/sh
+
+exec 1>&2
+
+get_current_commit_id() {
+    local reset="HEAD"
+    if ! git rev-parse --verify HEAD >/dev/null 2>&1;then
+        reset=$(git hash-object -t tree /dev/null)
+    fi
+
+    echo -n $reset
+}
+
+
+#Cppcheck的检查信息
+## error：代码中的错误项，包括内存泄漏等；
+## warning：为了避免产生bug而提供的编程改进意见；
+## style：编码风格，提示你哪些函数没有使用、哪些为多余代码等；
+## portability：提示跨平台时容易出现的问题；
+## performance：该部分代码可以优化；
+## information：其他信息，可以忽略；
+cpp_check() {
+    if which cppcheck >/dev/null 2>&1; then
+        echo "cppcheck start...."
+
+        local against=$(get_current_commit_id)
+        echo "cppcheck commit id: $against"
+
+        local file_list="$(git diff-index --cached $against | awk '{print $NF}' | grep -E "\.(h|hpp|c|cpp|cc|cxx)" | xargs)"
+
+        if [ -n "$file_list" ]; then
+            echo "cppcheck file list: $file_list"
+
+            cppcheck --enable=warning,style --inconclusive --template=gcc --language=c++ --std=c++11 $file_list
+            exit $?
+        fi
+
+        echo "cppcheck end!"
+    else
+        echo "warning: The cppcheck package is not installed!"
+    fi
+}
+cpp_check
+exit 0

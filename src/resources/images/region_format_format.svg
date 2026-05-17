@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>键盘</title>
+    <defs>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="94.9655813%" id="linearGradient-1">
+            <stop stop-color="#FAFAFA" offset="0%"></stop>
+            <stop stop-color="#F0F0F0" offset="100%"></stop>
+        </linearGradient>
+        <rect id="path-2" x="0" y="1.33333333" width="28" height="25.3333333" rx="2.66666667"></rect>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="100%" id="linearGradient-3">
+            <stop stop-color="#FB6C6C" offset="0%"></stop>
+            <stop stop-color="#D65555" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="38.380513%" y1="-123.263183%" x2="50%" y2="94.9655813%" id="linearGradient-4">
+            <stop stop-color="#FAFAFA" offset="0%"></stop>
+            <stop stop-color="#D1F2FA" offset="100%"></stop>
+        </linearGradient>
+    </defs>
+    <g id="安装器v25" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="UOS显示语言备份" transform="translate(-305, -454)">
+            <g id="编组" transform="translate(73, 165)">
+                <g id="DTK/列表/选项列表/双行下拉列表-带图标-Light备份" transform="translate(212, 269)">
+                    <g id="键盘" transform="translate(21.3333, 21.3333)">
+                        <g id="ICON" transform="translate(-0, -0)">
+                            <g id="矩形">
+                                <use fill="#FFFFFF" xlink:href="#path-2"></use>
+                                <rect stroke-opacity="0.1" stroke="#000000" stroke-width="1.33333333" stroke-linejoin="square" fill="url(#linearGradient-1)" x="0.666666667" y="2" width="26.6666667" height="24" rx="2.66666667"></rect>
+                            </g>
+                            <g id="date-time">
+                                <polygon id="路径" fill="#000000" fill-rule="nonzero" points="2.66666667 4 2.66666667 8 24.6666667 8 24.6666667 4 22.6666667 4 22.6666667 6 20.6666667 6 20.6666667 4 6.66666667 4 6.66666667 6 4.66666667 6 4.66666667 4"></polygon>
+                                <path d="M4,16 L5.33333333,16 L5.33333333,17.3333333 L4,17.3333333 L4,16 Z M8,16 L9.33333333,16 L9.33333333,17.3333333 L8,17.3333333 L8,16 Z M12,16 L13.3333333,16 L13.3333333,17.3333333 L12,17.3333333 L12,16 Z M16,16 L17.3333333,16 L17.3333333,17.3333333 L16,17.3333333 L16,16 Z M20,16 L21.3333333,16 L21.3333333,17.3333333 L20,17.3333333 L20,16 Z M8,12 L9.33333333,12 L9.33333333,13.3333333 L8,13.3333333 L8,12 Z M4,20 L5.33333333,20 L5.33333333,21.3333333 L4,21.3333333 L4,20 Z M8,20 L9.33333333,20 L9.33333333,21.3333333 L8,21.3333333 L8,20 Z M12,20 L13.3333333,20 L13.3333333,21.3333333 L12,21.3333333 L12,20 Z M13.3333333,13.3333333 L12,13.3333333 L12,12 L13.3333333,12 L13.3333333,13.3333333 Z M17.3333333,13.3333333 L16,13.3333333 L16,12 L17.3333333,12 L17.3333333,13.3333333 Z M21.3333333,13.3333333 L20,13.3333333 L20,12 L21.3333333,12 L21.3333333,13.3333333 Z" id="形状结合" fill="#BBBBBB" fill-rule="nonzero"></path>
+                                <path d="M25.3333333,2 C25.8856181,2 26.3856181,2.22385763 26.7475469,2.58578644 C27.1094757,2.94771525 27.3333333,3.44771525 27.3333333,4 L27.3333333,8.66666667 L0.666666667,8.66666667 L0.666666667,4 C0.666666667,3.44771525 0.890524292,2.94771525 1.2524531,2.58578644 C1.61438192,2.22385763 2.11438192,2 2.66666667,2 Z" id="矩形" stroke-opacity="0.1" stroke="#000000" stroke-width="1.33333333" fill="url(#linearGradient-3)"></path>
+                                <rect id="矩形" fill="#D3D3D3" fill-rule="nonzero" x="6.66666667" y="0" width="2.66666667" height="4" rx="1.33333333"></rect>
+                                <rect id="矩形" fill="#D3D3D3" fill-rule="nonzero" x="18.6666667" y="0" width="2.66666667" height="4" rx="1.33333333"></rect>
+                            </g>
+                        </g>
+                        <g id="编组" transform="translate(14.6667, 10.6667)">
+                            <path d="M7.333315,0.733333333 C9.02407598,0.733333333 10.7154914,1.36367146 12.0057683,2.62689165 C13.2898863,3.88411792 13.9333333,5.53154764 13.9333333,7.17970106 C13.9333333,8.82785873 13.2898834,10.4753063 12.0057739,11.7325528 L7.33332476,16.3070544 L2.66091509,11.7325627 C1.37678709,10.4753053 0.733333333,8.82785831 0.733333333,7.17970106 C0.733333333,5.53154807 1.37678416,3.88411898 2.66090912,2.62689311 C3.95116112,1.36366854 5.64255831,0.733333333 7.333315,0.733333333 Z" id="路径" stroke-opacity="0.2" stroke="#0088C0" stroke-width="1.46666667" fill="url(#linearGradient-4)"></path>
+                            <ellipse id="椭圆形" fill="#0265BE" fill-rule="nonzero" cx="7.33333333" cy="7.35738095" rx="2.44444444" ry="2.405"></ellipse>
+                        </g>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

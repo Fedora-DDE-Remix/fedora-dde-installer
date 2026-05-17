@@ -1,0 +1,14 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+if is_ostree_system; then
+    if [[ "x$(installer_get DI_IS_GHOST_MODE)" == "xtrue" ]]; then
+        #同步base仓库数据
+        copy_ghost_files
+    else
+        unsquashfs_file "$DI_LIVE_DIR_ENV/live/filesystem.squashfs" /target/ ostree
+    fi
+    ostree_sys_init
+fi

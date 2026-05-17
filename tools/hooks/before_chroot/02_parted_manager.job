@@ -1,0 +1,18 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+# 写入分区状态
+install_status 1
+
+if [ "$(installer_get DI_IS_SAVE_AUTHORIZED_DATA_CONFIG)" = "true" ]; then
+    # 保存授权数据到分区表
+    save_authorized_data_to_parttable
+fi
+
+# 调用函数
+parted_umount    # 分区卸载
+parted_manager   # 分区创建
+shrink_filesystem # 调整文件系统缩小35M
+parted_mount     # 分区挂载

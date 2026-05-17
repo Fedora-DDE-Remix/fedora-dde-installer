@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="36px" height="36px" viewBox="0 0 36 36" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>编组 5</title>
+    <defs>
+        <linearGradient x1="50.0005263%" y1="11.9621667%" x2="50.0005263%" y2="100%" id="linearGradient-1">
+            <stop stop-color="#838383" offset="0%"></stop>
+            <stop stop-color="#4A4A4A" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="50.0005263%" y1="11.9621667%" x2="50.0005263%" y2="99.0434591%" id="linearGradient-2">
+            <stop stop-color="#939393" offset="0%"></stop>
+            <stop stop-color="#727272" offset="100%"></stop>
+        </linearGradient>
+        <path d="M4,0 L10.9088121,0 C11.2661448,-1.3979086e-15 11.5963233,0.190670018 11.7749315,0.500162879 L13.5060421,3.49983712 C13.6846503,3.80932998 14.0148288,4 14.3721615,4 L24,4 C26.209139,4 28,5.790861 28,8 L28,20 C28,22.209139 26.209139,24 24,24 L4,24 C1.790861,24 2.705415e-16,22.209139 0,20 L0,4 C-2.705415e-16,1.790861 1.790861,4.05812251e-16 4,0 Z" id="path-3"></path>
+        <filter x="-19.6%" y="-22.9%" width="139.3%" height="145.8%" filterUnits="objectBoundingBox" id="filter-4">
+            <feGaussianBlur stdDeviation="5" in="SourceAlpha" result="shadowBlurInner1"></feGaussianBlur>
+            <feOffset dx="0" dy="-1" in="shadowBlurInner1" result="shadowOffsetInner1"></feOffset>
+            <feComposite in="shadowOffsetInner1" in2="SourceAlpha" operator="arithmetic" k2="-1" k3="1" result="shadowInnerInner1"></feComposite>
+            <feColorMatrix values="0 0 0 0 0.147810342   0 0 0 0 0.147810342   0 0 0 0 0.147810342  0 0 0 0.383958083 0" type="matrix" in="shadowInnerInner1"></feColorMatrix>
+        </filter>
+    </defs>
+    <g id="V23最新" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="切图" transform="translate(-271.000000, -38.000000)">
+            <g id="编组-5" transform="translate(271.000000, 38.000000)">
+                <rect id="矩形" fill="#FF6969" opacity="0" x="0" y="0" width="36" height="36"></rect>
+                <g id="编组-3备份" transform="translate(4.000000, 6.000000)">
+                    <path d="M8.65496529,0.8 L25.4,0.8 C26.5045695,0.8 27.4,1.6954305 27.4,2.8 L27.4,9.1 C27.4,9.92842712 26.7284271,10.6 25.9,10.6 L8.04143146,10.6 C7.21300434,10.6 6.54143146,9.92842712 6.54143146,9.1 C6.54143146,9.05500145 6.54345633,9.01002569 6.54749992,8.96520918 L7.16103376,2.16520918 C7.23078305,1.39215457 7.87877047,0.8 8.65496529,0.8 Z" id="矩形" fill="url(#linearGradient-1)" opacity="0.300000012"></path>
+                    <g id="矩形">
+                        <use fill="url(#linearGradient-2)" fill-rule="evenodd" xlink:href="#path-3"></use>
+                        <use fill="black" fill-opacity="1" filter="url(#filter-4)" xlink:href="#path-3"></use>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

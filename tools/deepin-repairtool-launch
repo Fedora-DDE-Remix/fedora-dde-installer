@@ -1,0 +1,31 @@
+#!/bin/bash
+
+## 初始化环境变量
+source /usr/share/deepin-installer/tools/scripts/init_environment.sh
+## 导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+## 初始化日志
+LOG_FILE="/var/log/deepin-installer/deepin-installer.log"
+
+## 主函数
+main() {
+    ## 执行命令
+    if program_exist deepin-repair-tools ; then
+
+        local conf_file=/etc/lightdm/lightdm.conf
+
+
+        cat > /etc/lightdm/lightdm.conf <<EOF
+[Seat:*]
+display-setup-script=bash $DI_INSTALL_TOOLS_DIR_ENV/deepin-installer-init
+greeter-session=lightdm-deepin-greeter
+greeter-setup-script=deepin-repair-tools
+EOF
+        sleep 1
+        systemctl restart lightdm
+    else
+        warning "deepin-repair-tools is not exist"
+    fi
+}
+
+main

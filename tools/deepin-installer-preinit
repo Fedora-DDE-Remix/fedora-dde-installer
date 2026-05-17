@@ -1,0 +1,87 @@
+#!/bin/bash
+
+## 初始化环境变量
+source /usr/share/deepin-installer/tools/scripts/init_environment.sh
+
+## 导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+## 初始化日志
+LOG_FILE="/var/log/deepin-installer/deepin-installer-preinit.log"
+init_log $LOG_FILE
+
+main () {
+    # 刷新系统上的dm设备信息
+    dmsetup mknodes || true
+
+    # 打印系统信息
+    print_system_info
+
+    # 设置启动盘挂载点
+    setup_live_workdir
+
+    ## 挂载oem.squashfs
+    setup_oem_squashfs
+
+    ## 初始化live系统下安装器配置
+    init_config $DI_CONFIG_FILE_ENV
+
+    #设置无密码登录
+    setup_live_nopasswdlogin
+
+    ## 判断内核参数，确定是进入安装器还是live系统桌面
+    if is_livecd_install; then
+        ## 更新网络安装模式下的oem定制
+        pxe_update_oem
+
+        ## 初始化dconfig
+        dconfig_init
+
+        ## 开启快速登录功能
+        enable_quick_login
+
+        ## 初始化live系统下安装脚本目录
+        init_workspace
+
+        ## 初始化lightdm
+        init_lightdm "deepin-installer"
+
+        ## 执行before_install
+        before_install
+
+        ## 初始化执行阶段配置
+        init_hookslist
+
+        ## 解决部分N卡机器安装器界面花屏问题
+        deepin_nvidia_installer
+        ## 设置为最大亮度
+        set_brightness_to_max
+    else
+        ## 初始化live系统下安装脚本目录
+        init_live_workspace
+
+        ## 执行希望在进livecd桌面之前完成的操作
+        live_hooks
+
+        local DI_DESKTOP_ENV=$(installer_get "DI_DESKTOP_ENV")
+        echo "DI_DESKTOP_ENV=${DI_DESKTOP_ENV}"
+        if [ "${DI_DESKTOP_ENV}" != "x11" ]; then
+            ## 将桌面环境设置成wayland
+            cp /usr/share/xsessions/deepin.desktop /usr/share/xsessions/X11deepin.desktop.back
+            cp /usr/share/wayland-sessions/Wayland.desktop /usr/share/xsessions/deepin.desktop
+        fi
+
+        ## 设置live桌面的安装器desktop
+        setup_live_install_desktop
+
+        # 设置自动登录
+        setup_live_autologin
+
+        setup_lightdm_auto_login $(installer_get "LIVE_USERNAME")
+
+        fix_lightdm_user_session
+        init_lightdm "deepin-installer-live-config"
+    fi
+}
+
+main > $LOG_FILE 2>&1
+

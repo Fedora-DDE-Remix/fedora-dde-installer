@@ -1,0 +1,86 @@
+/*
+    deepin-installer-parted输入模板
+*/
+[
+    {
+        "type":"disk",
+        "device":"/dev/sda",
+        "operate":"edit",
+        "diskType":"msdos"
+    },
+    {
+        "id":"",
+        "type":"partition",
+        "operate":"edit",
+        "device":"",
+        "filesystem": "ext4",
+        "mountPoint": "/data2",
+        "label": "_dde_data",
+        "startPoint":"",
+        "endPoint":"",
+        "index":-1,
+        "isstartpoint":true
+    },
+    {
+        "id":"",
+        "type":"partition",
+        "operate":"new",
+        "device":"",
+        "filesystem": "ext4",
+        "mountPoint": "/data2",
+        "label": "_dde_data",
+        "startPoint":"",
+        "endPoint":"",
+        "index":-1,
+        "isstartpoint":true
+    },
+    {
+        "id":"",
+        "type":"partition",
+        "operate":"delete",
+        "device":"",
+        "filesystem": "ext4",
+        "mountPoint": "/data2",
+        "label": "_dde_data",
+        "startPoint":"",
+        "endPoint":"",
+        "index":-1,
+        "isstartpoint":true
+    },
+    {
+        "id":"",
+        "type":"VG",
+        "operate":"new",
+        "vg":"vg0",
+        "pv":["parted-id1", "parted-id2"],
+    },
+    {
+        "id":"",
+        "type":"VG",
+        "operate":"delete",
+        "vg":"vg0",
+        "pv":["parted-id1", "parted-id2"],
+    },
+    {
+        "id":"",
+        "type":"LVM",
+        "operate":"delete",
+        "filesystem": "ext4",
+        "mountPoint": "/data2",
+        "label": "_dde_data",
+        "size":"",
+        "vg":"vg0"
+    },
+    {
+        "id":"",
+        "type":"LVM",
+        "operate":"delete",
+        "filesystem": "ext4",
+        "mountPoint": "/data2",
+        "label": "_dde_data",
+        "size":"",
+        "vg":"vg1"
+    },
+]
+
+

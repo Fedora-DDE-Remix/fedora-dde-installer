@@ -1,0 +1,21 @@
+## 获取当前目录下的子目录
+MACRO(SUBDIRLIST result curdir)
+  FILE(GLOB children RELATIVE ${curdir} ${curdir}/*)
+  SET(dirlist "")
+  FOREACH(child ${children})
+    IF(IS_DIRECTORY ${curdir}/${child})
+      LIST(APPEND dirlist ${child})
+    ENDIF()
+  ENDFOREACH()
+  SET(${result} ${dirlist})
+ENDMACRO()
+SUBDIRLIST(DIRLIST ${CMAKE_CURRENT_SOURCE_DIR})
+
+## 自动向工程下添加modules目录，如果modules目录下没有CMakeLists，则自动生成CMakeLists.txt
+FOREACH(subdir ${DIRLIST})
+    set(M_PATH "${CMAKE_CURRENT_SOURCE_DIR}/${subdir}")
+    if(NOT EXISTS "${M_PATH}/CMakeLists.txt")
+        file(WRITE ${M_PATH}/CMakeLists.txt "")
+    endif()
+    add_subdirectory(${subdir})
+ENDFOREACH()

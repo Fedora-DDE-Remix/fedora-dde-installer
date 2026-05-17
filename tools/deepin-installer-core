@@ -1,0 +1,61 @@
+#!/bin/bash
+
+## 初始化环境变量
+source /usr/share/deepin-installer/tools/scripts/init_environment.sh
+## 导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+APP_NAME=$1
+
+## 初始化日志
+LOG_FILE="/var/log/deepin-installer/${APP_NAME}-core.log"
+init_log $LOG_FILE
+
+
+
+set_scale_factor()
+{
+    dim=$(xdpyinfo | awk '/dimension/{print $2}')
+    res=$(xdpyinfo | awk '/resolution/{print $2}' | awk -F 'x' '{print $1}')
+    w="$(echo $dim | awk -F 'x' '{print $1}')"
+    h="$(echo $dim | awk -F 'x' '{print $2}')"
+    if [ "$w" -gt "$h" ]; then
+        short_edge="$h"
+    else
+        short_edge="$w"
+    fi
+
+    # get scale factor based on 1080p monitor with 96x96 resolution. (1080p 96x96 = scale 1.0). Only if the screen size if larger than 1080p.
+    DI_DESKTOP_ENV=$(installer_get "DI_DESKTOP_ENV")
+    if [ "$short_edge" -gt 1080 ] && [ "${DI_DESKTOP_ENV}" != "x11" ]; then
+        export QT_SCALE_FACTOR=$(python3 -c "print($short_edge / 1080 * 96 / $res, end='')")
+    fi
+}
+
+## 主函数
+main() {
+    ## 执行命令
+    echo "run ${APP_NAME}"
+
+    ## 试用模式不需要监控kwin是否启动，由dde负责
+    if is_livecd_install || [ $APP_NAME = "deepin-installer-first-boot" ]; then
+        /usr/lib/qt6/bin/qdbus org.kde.KWin /Compositor org.freedesktop.DBus.Properties.Get  org.kde.kwin.Compositing  compositingType
+        while [ $? -ne 0 ]; do
+            echo "waiting for kwin"
+            sleep 1
+            /usr/lib/qt6/bin/qdbus org.kde.KWin /Compositor org.freedesktop.DBus.Properties.Get  org.kde.kwin.Compositing  compositingType
+        done
+
+        #set_scale_factor
+    fi
+
+    # 设置环境变量
+    export QT_QPA_PLATFORM=dxcb;xcb
+
+    #屏蔽win键
+    xmodmap -e "keycode 133 =" || true
+    xmodmap -e "keycode 134 =" || true
+    ${APP_NAME}
+}
+
+main > $LOG_FILE 2>&1

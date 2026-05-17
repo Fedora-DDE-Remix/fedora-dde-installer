@@ -1,0 +1,6 @@
+#!/bin/bash
+
+#如果执行到本脚本说明存在后配置，deepin-installer-extra服务已被禁用
+#这里直接调用deepin-installer-extra。 如果没有执行到此脚本，deepin-installer-extra
+#将会已systemd服务的方式被开机自动执行
+$DI_INSTALL_TOOLS_DIR_ENV/deepin-installer-extra

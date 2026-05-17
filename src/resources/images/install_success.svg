@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="380px" height="270px" viewBox="0 0 380 270" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>编组 3</title>
+    <defs>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="98.9433662%" id="linearGradient-1">
+            <stop stop-color="#303030" offset="0%"></stop>
+            <stop stop-color="#454545" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="98.2370657%" id="linearGradient-2">
+            <stop stop-color="#3E3E3E" offset="0%"></stop>
+            <stop stop-color="#2A2A2A" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="100%" id="linearGradient-3">
+            <stop stop-color="#FFFFFF" offset="0%"></stop>
+            <stop stop-color="#EEF4FF" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="100%" id="linearGradient-4">
+            <stop stop-color="#6A6A6A" offset="0%"></stop>
+            <stop stop-color="#464545" offset="100%"></stop>
+        </linearGradient>
+        <rect id="path-5" x="0" y="0" width="329" height="210" rx="12"></rect>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="100%" id="linearGradient-7">
+            <stop stop-color="#55C600" offset="0%"></stop>
+            <stop stop-color="#00C3B6" offset="100%"></stop>
+        </linearGradient>
+    </defs>
+    <g id="V23最新" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="切图" transform="translate(-44.000000, -268.000000)">
+            <g id="编组-3" transform="translate(44.000000, 268.000000)">
+                <rect id="矩形" x="0" y="0" width="380" height="270"></rect>
+                <rect id="矩形" fill="url(#linearGradient-1)" x="165" y="230" width="50" height="21"></rect>
+                <path d="M112,251 L268,251 C269.656854,251 271,252.343146 271,254 C271,255.656854 269.656854,257 268,257 L112,257 C110.343146,257 109,255.656854 109,254 C109,252.343146 110.343146,251 112,251 Z" id="矩形" fill="url(#linearGradient-2)"></path>
+                <g id="矩形" transform="translate(26.000000, 20.000000)">
+                    <mask id="mask-6" fill="white">
+                        <use xlink:href="#path-5"></use>
+                    </mask>
+                    <rect stroke="url(#linearGradient-4)" stroke-width="6" x="-3" y="-3" width="335" height="216" rx="12"></rect>
+                    <g id="progress" mask="url(#mask-6)">
+                        <g transform="translate(125.335863, 66.227273)">
+                            <path d="M39,77.8381743 C60.5391052,77.8381743 78,60.4135054 78,38.9190871 C78,17.4246688 60.5391052,0 39,0 C17.4608948,0 0,17.4246688 0,38.9190871 C0,60.4135054 17.4608948,77.8381743 39,77.8381743 Z" id="Combined-Shape" fill="url(#linearGradient-7)" fill-rule="evenodd"></path>
+                            <path d="M29.4859396,49.6249813 C32.4855422,52.8630586 37.3410491,52.8476824 40.3269705,49.5950464 L60.3161053,27.8204005 C61.2068958,26.850041 61.1407569,25.3427791 60.1683801,24.4538368 C59.1960032,23.5648944 57.6856077,23.6308961 56.7948172,24.6012556 L36.2801178,47.0043997 C35.5338067,47.8194111 34.3267902,47.8302354 33.5692955,47.0125183 L22.4472358,35.0062321 C21.552066,34.0398944 20.0413874,33.9806959 19.0730407,34.8740085 C18.104694,35.7673212 18.0453724,37.2748656 18.9405422,38.2412033 L29.4859396,49.6249813 Z" id="Path-119" fill="#FFFFFF" fill-rule="nonzero"></path>
+                        </g>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

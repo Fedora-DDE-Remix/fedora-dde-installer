@@ -1,0 +1,58 @@
+Source: deepin-installer-reborn
+Section: utils
+Priority: optional
+Maintainer: Deepin Packages Builder <packages@deepin.com>
+Build-Depends:
+    cmake (>=3.1),
+    debhelper (>=9),
+    dh-sequence-systemd,
+    g++ (>=6.3.0),
+    pkg-config,
+    gettext,
+    qt6-base-dev,
+    qt6-base-dev-tools,
+    qt6-tools-dev,
+    libdtk6core-dev,
+    libdtk6gui-dev,
+    libdtk6widget-dev,
+    libdtk6core-bin,
+    libudisks2-qt6-dev,
+    libdeepin-pw-check-dev,
+    libparted-dev,
+    libutf8proc-dev,
+    dde-session-shell-dev,
+    libicu-dev,
+    libqtermwidget-dev,
+    locales
+Standards-Version: 3.9.8
+Homepage: http://www.deepin.org
+
+Package: deepin-installer
+Architecture: any
+Depends:
+    ${shlibs:Depends},
+    ${misc:Depends},
+    dosfstools,
+    parted,
+    squashfs-tools,
+    cryptsetup,
+    cryptsetup-initramfs,
+    lvm2,
+    kbd,
+    libdeepin-pw-check,
+    deepin-pw-check,
+    btrfs-progs,
+    jfsutils,
+    ntfs-3g,
+    reiserfsprogs,
+    xfsprogs,
+    tzdata,
+    tpm2-abrmd,
+    tpm2-tools,
+    usec-boot-crypt,
+    qdbus-qt6,
+    deepin-installer-timezones,
+    uos-license-content (>= 1.1.10)
+Description: Release version of deepin installer
+ New version of deepin-installer, rewritten with Qt6.
+

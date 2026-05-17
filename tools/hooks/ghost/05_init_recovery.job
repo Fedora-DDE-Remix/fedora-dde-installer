@@ -1,0 +1,14 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+
+# 将安装器的日志安装到目标系统
+install_log
+
+ # 创建ostree快照
+chroot /target deepin-immutable-ctl snapshot create "First backup" "System initialization backup" || error "Failed to create ostree snapshot"
+
+# 同步数据
+sync

@@ -1,0 +1,4 @@
+
+if is_have_first_boot; then
+    install_status 5
+fi

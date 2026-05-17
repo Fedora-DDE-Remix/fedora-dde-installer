@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64px" height="64px" viewBox="0 0 64 64" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>自定义</title>
+    <defs>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="94.9655813%" id="linearGradient-1">
+            <stop stop-color="#0080FF" offset="0%"></stop>
+            <stop stop-color="#0046FF" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="50%" y1="0%" x2="50%" y2="100%" id="linearGradient-2">
+            <stop stop-color="#FFFFFF" offset="0%"></stop>
+            <stop stop-color="#D7F0F6" offset="87.4559385%"></stop>
+            <stop stop-color="#F2F2F2" offset="100%"></stop>
+        </linearGradient>
+    </defs>
+    <g id="安装器v25" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="安装类型-ISO镜像安装" transform="translate(-680, -512)">
+            <g id="编组-2备份" transform="translate(660, 492)">
+                <g id="自定义" transform="translate(20, 20)">
+                    <rect id="矩形" x="0" y="0" width="64" height="64"></rect>
+                    <g id="icon/custom" transform="translate(8, 8)">
+                        <rect id="矩形" x="0" y="-3.55271368e-15" width="48" height="48"></rect>
+                        <path d="M22.3195927,4.18669014 L22.3195927,43.8869866 C17.2811059,43.4662342 12.7756554,41.1700188 9.50311419,37.69879 C6.14076465,34.1323003 4.08,29.3252226 4.08,24.0368384 C4.08,18.7484541 6.14076465,13.9413764 9.50311419,10.3748867 C12.7756554,6.90365793 17.2811059,4.60744254 22.3195927,4.18669014 Z" id="形状结合" stroke-opacity="0.06" stroke="#000000" stroke-width="0.96" fill="url(#linearGradient-1)"></path>
+                        <path d="M24.48,4.08566979 C29.7901067,4.21124057 34.5859039,6.41476975 38.0855671,9.91443292 C41.5852303,13.4140961 43.7887594,18.2098933 43.9143302,23.52 L24.48,23.52 Z" id="形状结合" stroke-opacity="0.1" stroke="#000000" stroke-width="0.96" fill-opacity="0.6" fill="#2A98FF"></path>
+                        <path d="M43.8871058,25.6802278 C43.4664797,30.7188397 41.1703009,35.224422 37.6990552,38.497065 C34.2405416,41.7577044 29.6153791,43.7943596 24.5159798,43.9147116 L24.4809237,25.6800055 Z" id="形状结合" stroke-opacity="0.1" stroke="#000000" stroke-width="0.96" fill="#2A98FF"></path>
+                        <path d="M38.72,28.08 L38.72,36.48 L43.2411775,36.48 L36,43.7211775 L28.7588225,36.48 L33.28,36.48 L33.28,28.08 L38.72,28.08 Z" id="路径备份" stroke-opacity="0.1" stroke="#000000" stroke-width="0.96" fill="url(#linearGradient-2)"></path>
+                    </g>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

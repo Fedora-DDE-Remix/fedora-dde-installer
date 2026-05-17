@@ -1,0 +1,52 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+install_status 80
+
+
+
+# 清理掉apt设置,避免恢复出厂设置之后保留了apt配置
+remove_apt_conf
+remove_local_repository
+
+
+# deploy persistent
+if is_ostree_system; then
+    deploy_persistent
+    delete_boot_1
+
+    if ! is_have_first_boot && exists_data_part && ! exist_home_part; then
+        mkdir -p /target/persistent/home || error "mkdir -p /target/persistent/home failed"
+        mkdir -p /target/home || error "mkdir -p /target/home failed"
+        mount -v --bind /target/persistent/home /target/home || error "mount -v --bind /target/persistent/home /target/home failed"
+    fi
+else
+    chroot /target /usr/sbin/update-initramfs -k all -u
+fi
+
+if is_mips; then
+    cp -rvf /usr/lib/grub/mips64el-efi /target/boot/grub/ || error "cp -rvf /usr/lib/grub/mips64el-efi /target/boot/grub/ failed !"
+
+    cp -rvf /boot/efi  /target/boot/ || error "cp -rvf /boot/efi  /target/boot/ failed !"
+
+    if [ ! -f "/boot/efi/EFI/BOOT/grub.cfg" ]; then
+        cp -vf /target/boot/grub/grub.cfg /target/boot/efi/EFI/BOOT/ || error "cp -vf /target/boot/grub/grub.cfg /target/boot/efi/EFI/BOOT/ failed !"
+    fi
+
+    ln -s /target/boot/efi/EFI /target/EFI || error "ln -s /target/boot/efi/EFI /target/EFI !"
+fi
+
+if [ x${DI_OS_VERSION_ENV} = "xV23" ]; then
+    ## 配置ostree
+    setup_ostree
+elif [ x${DI_OS_VERSION_ENV} = "xV25" ]; then
+    setup_ostree_snapshot
+elif [ x${DI_OS_VERSION_ENV} = "xV20" ]; then
+    ## 使用deepin-clone配置初始备份
+    kill_process_opened_by_chroot
+    setup_deepin_clone_recovery
+fi
+
+sync

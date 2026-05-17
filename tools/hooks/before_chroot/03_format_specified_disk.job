@@ -1,0 +1,57 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+do_format() {
+    if [ $# -ne 2 ]; then
+        echo "Usage: $0 <disk> <file_system>"
+        return 1
+    fi
+
+    # 如果参数1设备被挂在，将其卸载
+    local mounted_part=$(mount |grep "$1" |awk '{print $1}')
+    for partition in $mounted_part; do
+       echo "partition=$partition"
+    	umount $partition
+    done
+
+    # 参数1设备是否存在
+    if [ ! -e "$1" ]; then
+        echo "device $1 not found"
+        return 1
+    fi
+
+    local device=$1
+    local format_type=$2
+    udevadm settle --timeout=10
+    parted -s  $device mklabel gpt
+    parted -s  $device mkpart primary 0% 100%
+    sleep 3
+    mounted_part=$(mount |grep "$device" |awk '{print $1}')
+    echo "mounted_part=$mounted_part"
+    if [[ -n $mounted_part ]]; then
+	      umount $mounted_part || umount $mounted_part failed!
+    fi
+
+    local format_command="/usr/sbin/mkfs.${format_type}"
+    if [ ! -f "$format_command" ]; then
+        echo "mkfs.$format_type not found"
+        return 1
+    fi
+    $format_command  "${device}1" -F
+}
+
+DISK_ONLY_FORMAT=$(installer_get "DI_DISK_ONLY_FORMAT")
+# 以分号分割，将DISK_ONLY_FORMAT转化为数组
+IFS=';' read -ra DISK_ONLY_FORMAT_ARRAY <<< "$DISK_ONLY_FORMAT"
+# 遍历数组
+for i in "${DISK_ONLY_FORMAT_ARRAY[@]}"; do
+    IFS=':' read -ra array <<< "$i"
+    # 如果array数组长度为2，说明有格式化信息
+    if [ ${#array[@]} -eq 2 ]; then
+        FORMAT_DEVICE="${array[0]}"
+        FORMAT_TYPE="${array[1]}"
+        do_format $FORMAT_DEVICE $FORMAT_TYPE || echo "$FORMAT_DEVICE $FORMAT_TYPE format failed"
+    fi
+done

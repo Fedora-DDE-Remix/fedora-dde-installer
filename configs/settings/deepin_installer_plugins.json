@@ -1,0 +1,154 @@
+[
+    {
+        "mode":"no-first-boot",
+        "plugins": [
+            {
+                "name":"SelectLanguages",
+                "version":"",
+                "path":"libDeepinInstallerLanguage.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"SelectOSVersion",
+                "version":"",
+                "path":"libDeepinInstallerSelectOSVersionFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"Verify",
+                "version": "",
+                "path": "libDeepinInstallerVerifyFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"InstallerPartition",
+                "version":"",
+                "path":"libDeepinInstallerPartitionFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"SelectComponents",
+                "version":"",
+                "path":"libDeepinInstallerComponentFrame.so",
+                "osType": [ "Server" ]
+            },
+            {
+                "name":"InstallApplication",
+                "version":"",
+                "path":"DeepinInstallerInstallApplicationFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                 "name":"UserInfo",
+                 "version":"",
+                 "path":"libDeepinInstallerUserInfoFrame.so",
+                 "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"RegionFormat",
+                "version":"",
+                "path":"libDeepinInstallerRegionFormatFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"InstallPrepare",
+                "version":"",
+                "path":"libDeepinInstallerPrepareFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"InstallerProgress",
+                "version":"",
+                "path":"libDeepinInstallerProgressFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            }
+        ]
+    },
+    {
+        "mode":"auto-install",
+        "plugins": [
+            {
+                "name":"Verify",
+                "version": "",
+                "path": "libDeepinInstallerVerifyFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"InstallerProgress",
+                "version":"",
+                "path":"libDeepinInstallerProgressFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            }
+        ]
+    },
+    {
+        "mode":"auto-no-first-boot",
+        "plugins":[
+            {
+                "name":"Verify",
+                "version": "",
+                "path": "libDeepinInstallerVerifyFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"InstallerProgress",
+                "version":" ",
+                "path":"libDeepinInstallerProgressFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            }
+        ]
+    },
+    {
+        "mode":"default",
+        "plugins":[
+            {
+                "name":"SelectLanguages",
+                "version":"",
+                "path":"libDeepinInstallerLanguage.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"SelectOSVersion",
+                "version":"",
+                "path":"libDeepinInstallerSelectOSVersionFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"Verify",
+                "version": "",
+                "path": "libDeepinInstallerVerifyFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"InstallerPartition",
+                "version":"",
+                "path":"libDeepinInstallerPartitionFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"SelectComponents",
+                "version":"",
+                "path":"libDeepinInstallerComponentFrame.so",
+                "osType": [ "Server" ]
+            },
+            {
+                "name":"InstallApplication",
+                "version":"",
+                "path":"DeepinInstallerInstallApplicationFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"InstallPrepare",
+                "version":"",
+                "path":"libDeepinInstallerPrepareFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            },
+            {
+                "name":"InstallerProgress",
+                "version":"",
+                "path":"libDeepinInstallerProgressFrame.so",
+                "osType": [ "Desktop", "Professional", "Server", "Personal", "Device", "E", "Military" ]
+            }
+        ]
+    }
+]

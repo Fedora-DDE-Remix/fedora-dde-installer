@@ -1,0 +1,9 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+# 处理chroot环境的hooks
+setup_chroot_hooks
+
+install_status 60

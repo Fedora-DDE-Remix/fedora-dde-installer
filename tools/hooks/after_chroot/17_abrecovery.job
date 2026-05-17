@@ -1,0 +1,7 @@
+#!/bin/bash
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+if [ x${DI_OS_VERSION_ENV} = "xV20" ]; then
+    do_ab_recovery_generate
+fi

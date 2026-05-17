@@ -1,0 +1,60 @@
+[
+    {
+        "label":"Boot",
+        "filesystem": "ext4",
+        "mountPoint": "/boot",
+        "alignStart": true,
+        "platform": [ "x86" , "sw" , "loongson" , "arm", "loongarch64", "riscv64" ],
+        "OSVersion": ["V20", "V23", "V25"]
+    },
+    {
+        "label":"SWAP",
+        "filesystem": "linux-swap",
+        "mountPoint": "swap",
+        "alignStart": true,
+        "platform": [ "x86", "sw", "loongson", "arm", "loongarch64", "riscv64" ],
+        "OSVersion": ["V20", "V23", "V25"]
+    },
+    {
+        "label": "Backup",
+        "filesystem": "ext4",
+        "alignStart": true,
+        "mountPoint": "/recovery",
+        "platform": [ "x86", "sw", "loongson", "arm", "loongarch64", "riscv64" ],
+        "OSVersion": ["V20"]
+    },
+    {
+        "label":"Roota",
+        "filesystem": "ext4",
+        "alignStart": true,
+        "mountPoint": "/",
+        "platform": [ "x86", "sw", "loongson", "arm", "loongarch64", "riscv64" ],
+        "OSVersion": ["V20", "V23", "V25"]
+    },
+    {
+        "label": "Rootb",
+        "filesystem": "ext4",
+        "alignStart": true,
+        "mountPoint": "",
+        "platform": [ "x86", "sw", "loongson", "arm", "loongarch64", "riscv64" ],
+        "OSVersion": ["V20"]
+    },
+    {
+        "label":"_dde_data",
+        "filesystem": "ext4",
+        "alignStart": true,
+        "usage": "100%",
+        "platform": [ "x86", "sw", "loongson", "arm", "loongarch64", "riscv64" ],
+        "OSVersion": ["V20", "V23", "V25"]
+    },
+    {
+        "label":"_dde_home",
+        "filesystem": "ext4",
+        "alignStart": true,
+        "mountPoint": "/home",
+        "usage": "100%",
+        "platform": [ "x86", "sw", "loongson", "arm", "loongarch64", "riscv64" ],
+        "OSVersion": ["V20", "V23", "V25"]
+    }]
+
+

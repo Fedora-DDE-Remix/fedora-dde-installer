@@ -1,0 +1,10 @@
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+install_status 50
+
+## 取消后配置服务开机启动
+disable_first_boot_service
+
+## 替换掉启后配置安装器的lightdm
+cleanup_lightdm_deepin_installer

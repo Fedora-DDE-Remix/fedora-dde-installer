@@ -1,0 +1,56 @@
+#!/bin/bash
+
+## 初始化环境变量
+source /usr/share/deepin-installer/tools/scripts/init_environment.sh
+
+## 导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+## 初始化日志
+LOG_FILE="/var/log/deepin-installer/deepin-installer-live.log"
+init_log $LOG_FILE
+
+main () {
+    # 打印系统信息
+    print_system_info
+
+    # 卸载磁盘
+    umount_disk
+
+    ## 初始化live系统下安装器配置
+    init_config $DI_CONFIG_FILE_ENV
+
+    ## 开启快速登录功能
+    enable_quick_login
+
+    ## 初始化live系统下安装脚本目录
+    init_workspace
+
+    ## 执行before_install
+    before_install
+
+    ## 初始化执行阶段配置
+    init_hookslist
+
+    if is_community; then
+        init_lightdm "deepin-installer"
+        #systemctl start replace-ddm-with-lightdm
+        systemctl restart lightdm
+    else
+        local DI_DESKTOP_ENV=$(installer_get "DI_DESKTOP_ENV")
+        if [ "${DI_DESKTOP_ENV}" = "x11" ]; then
+          ## 直接在桌面环境启动安装器
+            $DI_INSTALL_TOOLS_DIR_ENV/deepin-installer-core "deepin-installer"
+        else
+            ##将桌面环境还原x11
+            cp /usr/share/xsessions/X11deepin.desktop.back /usr/share/xsessions/deepin.desktop
+            ## 初始化lightdm，用lightdm拉起安装器
+            init_lightdm "deepin-installer"
+            systemctl restart lightdm
+        fi
+    fi
+}
+
+main > $LOG_FILE 2>&1
+
+

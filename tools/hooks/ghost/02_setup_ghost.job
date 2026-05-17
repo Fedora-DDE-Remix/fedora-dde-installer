@@ -1,0 +1,39 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+# 调用函数
+setup_fstab
+
+# 拷贝fstab和lsb-release到根分区设备的根目录下
+copy_fstab_lsbrelease_to_rootdev
+
+# ghost安装分区uuid改变，删除原有的80-udisks-installer.rules
+rm -rf /target/etc/udev/rules.d/80-udisks-installer.rules || warning "rm -rf /target/etc/udev/rules.d/80-udisks-installer.rules failed"
+
+# 删除ghost安装过程中往target拷贝的脚本文件
+rm -rf /target/usr/share/deepin-installer || warning "rm -rf /target/usr/share/deepin-installer failed"
+rm -fr /target/var/lib/deepin-installer || warning "rm -rf /target/var/lib/deepin-installer failed"
+setup_udisks_rules
+
+
+# deploy persistent
+if is_ostree_system; then
+    deploy_persistent
+    delete_boot_1
+else
+    chroot /target /usr/sbin/update-initramfs -k all -u
+fi
+
+if is_mips; then
+    cp -rvf /usr/lib/grub/mips64el-efi /target/boot/grub/ || error "cp -rvf /usr/lib/grub/mips64el-efi /target/boot/grub/ failed !"
+
+    cp -rvf /boot/efi  /target/boot/ || error "cp -rvf /boot/efi  /target/boot/ failed !"
+
+    if [ ! -f "/boot/efi/EFI/BOOT/grub.cfg" ]; then
+        cp -vf /target/boot/grub/grub.cfg /target/boot/efi/EFI/BOOT/ || error "cp -vf /target/boot/grub/grub.cfg /target/boot/efi/EFI/BOOT/ failed !"
+    fi
+
+    ln -s /target/boot/efi/EFI /target/EFI || error "ln -s /target/boot/efi/EFI /target/EFI !"
+fi

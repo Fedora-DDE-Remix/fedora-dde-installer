@@ -1,0 +1,7 @@
+#!/bin/sh
+
+SHARE_DIR=/usr/share/deepin-installer
+
+if [ -d $SHARE_DIR ]; then
+    rm -rf $SHARE_DIR
+fi

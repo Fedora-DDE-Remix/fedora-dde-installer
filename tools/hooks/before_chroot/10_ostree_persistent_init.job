@@ -1,0 +1,39 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+if is_ostree_system; then
+    dataDir=/target/persistent
+    mkdir -p $dataDir || error "Failed to create $dataDir"
+    data_device=$(installer_get "DI_DATA_DEVICE_CONFIG")
+    # 如果data_device不为空，则不挂载
+    if [ -n "$data_device" ]; then
+        mount "$data_device" $dataDir
+        mount --make-private $dataDir
+    fi
+    if [[ "x$(installer_get DI_IS_GHOST_MODE)" == "xtrue" ]]; then
+        mkdir -p $dataDir/ostree
+        rsync_file -aHAX --delete /uimg/localhost/persistent/ostree/repo/ $dataDir/ostree/repo || error "Failed to rsync /uimg/localhost/persistent/ostree/repo"
+        ext_commitId=$(cat /uimg/localhost/persistent/ostree/data/status.list | head -1 | awk  -F. '{print $1}')
+        mkdir -p $dataDir/ostree/data/$ext_commitId.0
+        ostree checkout --repo=$dataDir/ostree/repo --process-passthrough-whiteouts $ext_commitId $dataDir/ostree/data/$ext_commitId.0/checkout || error "ext checkout failed"
+
+    else
+        unsquashfs_file "$DI_LIVE_DIR_ENV/live/filesystem-extra.squashfs" $dataDir persistent/ostree
+        mv $dataDir/persistent/ostree $dataDir/ostree
+        rm -rf $dataDir/persistent
+        # 检出扩展层
+        ext_commitId=$(ostree --repo=$dataDir/ostree/repo rev-parse deb-ostree/main)
+        if [ -z "$ext_commitId" ]; then
+            error "ext_commitId is empty"
+        fi
+        mkdir -p $dataDir/ostree/data/$ext_commitId.0
+        ostree checkout --repo=$dataDir/ostree/repo --process-passthrough-whiteouts $ext_commitId $dataDir/ostree/data/$ext_commitId.0/checkout || error "ext checkout failed"
+    fi
+
+    # 如果/persistent/uos-recovery目录存在，则将/persistent/uos-recovery目录中的文件拷贝到/target/persistent/uos-recovery目录中
+    if [ -d /persistent/uos-recovery ]; then
+        cp -rvf /persistent/uos-recovery/ $dataDir/uos-recovery || warning "Failed to copy /persistent/uos-recovery to $dataDir/uos-recovery"
+    fi
+fi

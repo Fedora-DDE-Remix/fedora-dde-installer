@@ -1,0 +1,14 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+sleep 1
+
+# 调用函数
+## 替换掉启后配置安装器的lightdm
+cleanup_lightdm_deepin_installer
+
+## 重启lightdm
+systemctl restart lightdm.service
+

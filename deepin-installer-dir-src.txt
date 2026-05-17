@@ -1,0 +1,48 @@
+.
+├── deepin-installer-dir-src.txt
+├── CMakeLists.txt                                      # 工程总CMakeLists.txt，用于编译版本和库相关配置
+├── deepin-installer.service                            # 安装器入口服务
+├── configs                                             # 安装器配置目录，目录下的配置可以oem定制
+│   ├── CMakeLists.txt
+│   ├── settings                                        ## settings配置目录
+│   │   ├── CMakeLists.txt
+│   │   ├── default_settings.ini                        ### 默认配置文件
+│   │   ├── deepin_installer_plugins.json               ### 前配置插件配置文件
+│   │   ├── deepin_installer_first_boot_plugins.json    ### 后配置插件配置文件
+│   │   ├── deepin_installer_parted_plugins.json        ### 分区工具插件配置文件
+│   │   ├── full_disk_policy.json                       ### 默认全盘分区策略配置文件
+│   │   ├── languages.json                              ### 语言默认配置文件
+│   │   └── partition_policy.json                       ### 分区前后端配置文件模板
+│   └── slides                                          ### 轮播图定制目录
+│       └── CMakeLists.txt
+├── src                                                 # 源码目录
+│   ├── CMakeLists.txt                                  ## 源码工程管理CMakeLists.txt，用于二进制程序编译的配置
+│   ├── resources                                       ## 源码资源存放目录，目录下的配置不可以oem定制
+│   │   ├── i18ns                                       ### 前端翻译存放目录
+│   │   ├── images                                      ### 前端图标资源存放目录
+│   │   └── licenses                                    ### 前端显示协议存放目录
+│   ├── apps                                            ##　各二进制程序main函数.cpp存放的目录
+│   ├── commons                                         ##　公共模块存放目录
+│   ├── interfaces                                      ##　接口存放目录
+│   ├── modules                                         ##　模块存放目录
+│   ├── services                                        ##　业务管理模块存放目录
+│   └── widgets                                         ##  自定义控件存放目录
+└── tools                                               # 工程工具模块存放目录
+    ├── deepin-installer-preinit                        ## 初始化脚本，负责初始化lightdm服务启动前的阶段
+    ├── deepin-installer-init                           ## 初始化脚本，负责初始化lightdm服务启动后的阶段
+    ├── functions                                       ## 函数库定义目录
+    │   ├── builds.sh                                   ### 定义构建脚本的函数
+    │   ├── defaults.sh                                 ### 定义默认的函数
+    │   └── logs.sh                                     ### 定义log输出的函数
+    ├── builds                                          ### 构建脚本存放目录
+    ├── hooks                                           ## 安装阶段的hooks脚本存放目录
+    │   ├── before_chroot                               ###　安装前准备脚本
+    │   ├── in_chroot                                   ###　安装脚本
+    │   ├── after_chroot                                ###　安装后清理脚本
+    │   ├── first_boot                                  ###　后配置阶段脚本
+    │   └── check_hooks                                 ###　审核模式阶段脚本
+    └── scripts                                         ##　公共脚本存放目录
+        ├── function_manager.sh                         ### 函数库管理脚本
+        ├── hook_manager.sh                             ### hooks管理脚本
+        └── init_environment.sh                         ### 安装过程中公共环境变量初始化脚本
+

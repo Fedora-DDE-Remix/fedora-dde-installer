@@ -1,0 +1,14 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+echo "*********************** after chroot *************************"
+DI_USE_RTC_TIME_CONFIG=$(installer_get "DI_USE_RTC_TIME_CONFIG")
+if [ "x${DI_USE_RTC_TIME_CONFIG}" = "xtrue" ]; then
+    date -s "+8 hours"
+fi
+
+# 调用函数
+print_system_info
+

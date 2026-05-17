@@ -1,0 +1,33 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+install_oem_uab_package
+install_app_uab_package
+
+
+#安装oem/deb目录定制的deb包
+install_oem_deb_package
+#安装组件包
+install_component_package
+#安装自定义选择deb包
+install_app_deb_package
+
+
+#安装N卡驱动
+# 社区版由于驱动版本问题，不能使用utcs安装驱动包
+if is_community; then
+    if [[ $(installer_get "DI_INSTALL_NVIDIA_DRIVER") == "true" ]]; then
+
+        #echo "deb [trusted=yes] file:$DI_LIVE_DIR_ENV beige main" > /etc/apt/sources.list
+        #apt update
+        #export DDE_DEBUG_LEVEL=debug
+        install_package nvidia-driver || warning "install nvidia driver failed!"
+    fi
+else
+    setup_utcs || warning "setup utcs failed!"
+fi
+
+# 安版本差异包
+install_Edition_Package

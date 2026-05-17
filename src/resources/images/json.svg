@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="16px" height="20px" viewBox="0 0 16 20" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>icon/json</title>
+    <defs>
+        <linearGradient x1="50%" y1="9.40791504%" x2="50%" y2="95.1452294%" id="linearGradient-1">
+            <stop stop-color="#00E073" offset="0%"></stop>
+            <stop stop-color="#00C69A" offset="100%"></stop>
+        </linearGradient>
+        <linearGradient x1="4.59312031%" y1="-7.10542736e-13%" x2="50%" y2="50%" id="linearGradient-2">
+            <stop stop-color="#F5FFF9" offset="0%"></stop>
+            <stop stop-color="#D6EADD" offset="82.7129177%"></stop>
+            <stop stop-color="#E8F6ED" offset="100%"></stop>
+        </linearGradient>
+    </defs>
+    <g id="1070" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="切图" transform="translate(-125, -336)">
+            <g id="icon/json" transform="translate(121, 334)">
+                <rect id="矩形" x="0" y="0" width="24" height="24"></rect>
+                <path d="M6,2 L14.5,2 L14.5,2 L20,7.5 L20,20 C20,21.1045695 19.1045695,22 18,22 L6,22 C4.8954305,22 4,21.1045695 4,20 L4,4 C4,2.8954305 4.8954305,2 6,2 Z" id="矩形" fill="url(#linearGradient-1)"></path>
+                <path d="M15.5,2 L20,2 L20,2 L14.5,7.5 L14.5,3 C14.5,2.44771525 14.9477153,2 15.5,2 Z" id="矩形" fill="url(#linearGradient-2)" transform="translate(17.25, 4.75) scale(-1, 1) rotate(-180) translate(-17.25, -4.75)"></path>
+                <path d="M17.25,9.4375 L17.25,9.8125 L6.75,9.8125 L6.75,9.4375 L17.25,9.4375 Z M17.25,11.3125 L17.25,11.6875 L6.75,11.6875 L6.75,11.3125 L17.25,11.3125 Z M17.25,13.1875 L17.25,13.5625 L6.75,13.5625 L6.75,13.1875 L17.25,13.1875 Z M17.25,15.0625 L17.25,15.4375 L6.75,15.4375 L6.75,15.0625 L17.25,15.0625 Z M17.25,16.9375 L17.25,17.3125 L6.75,17.3125 L6.75,16.9375 L17.25,16.9375 Z" id="Combined-Shape" fill="#FFFFFF"></path>
+            </g>
+        </g>
+    </g>
+</svg>

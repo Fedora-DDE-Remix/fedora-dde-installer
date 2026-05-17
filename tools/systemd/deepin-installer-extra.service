@@ -1,0 +1,16 @@
+[Unit]
+Description=Launch installer in normal mode
+DefaultDependencies=no
+Conflicts=shutdown.target
+Wants=systemd-udevd.service systemd-udev-trigger.service
+After=basic.target
+Before=lightdm.service
+
+[Service]
+Type=simple
+PrivateNetwork=yes
+ExecStart=/usr/bin/bash /usr/share/deepin-installer/tools/deepin-installer-extra
+User=root
+TimeoutSec=0
+[Install]
+WantedBy=basic.target

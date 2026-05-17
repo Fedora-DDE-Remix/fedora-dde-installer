@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="36px" height="36px" viewBox="0 0 36 36" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <title>DTK / Button / Light / Normal备份 4</title>
+    <g id="V23最新" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <g id="切图" transform="translate(-165.000000, -123.000000)">
+            <g id="button" transform="translate(165.000000, 123.000000)">
+                <rect id="button_background" x="0" y="0" width="36" height="36" rx="8"></rect>
+                <g id="编组-4" transform="translate(8.000000, 8.000000)">
+                    <path d="M16.1066972,2.24559489 C14.4174804,0.941119626 12.299369,0.165063509 10,0.165063509 C4.4771525,0.165063509 0,4.64221601 0,10.1650635 C0,15.687911 4.4771525,20.1650635 10,20.1650635 C15.5228475,20.1650635 20,15.687911 20,10.1650635" id="路径" stroke="#4C4C4C" stroke-linecap="round"></path>
+                    <circle id="椭圆形" fill="#4C4C4C" cx="10" cy="10" r="2"></circle>
+                    <polygon id="三角形" fill="#4C4C4C" transform="translate(17.500000, 3.165064) rotate(-240.000000) translate(-17.500000, -3.165064) " points="17.5 1.16506351 20 5.16506351 15 5.16506351"></polygon>
+                </g>
+            </g>
+        </g>
+    </g>
+</svg>

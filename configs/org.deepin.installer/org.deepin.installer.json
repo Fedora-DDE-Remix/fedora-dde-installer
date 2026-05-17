@@ -1,0 +1,16 @@
+{
+  "magic": "dsg.config.meta",
+  "version": "1.0",
+  "contents": {
+      "restartMonitor": {
+          "value": false,
+          "serial": 0,
+          "flags": ["global"],
+          "name": "restart monitor",
+          "name[zh_CN]": "重启显示器",
+          "description": "部分机器需要重启显示器才能正常显示安装器界面",
+          "permissions": "readwrite",
+          "visibility": "private"
+      }
+  }
+}

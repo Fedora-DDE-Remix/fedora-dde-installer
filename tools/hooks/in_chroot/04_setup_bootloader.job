@@ -1,0 +1,21 @@
+#!/bin/bash
+
+#导入函数库
+source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
+
+if ! is_ostree_system; then
+    install_esp_package
+fi
+# 安装引导包
+install_bootloader
+
+# 配置引导
+setup_bootloader
+
+# 设置grub主题
+setup_grub_theme
+
+# 磐石系统不需要更新grub，因为deploy会自动更新grub。 此处即使更新了grub，也会被deploy覆盖
+if ! is_ostree_system; then
+    update_grub_local
+fi
