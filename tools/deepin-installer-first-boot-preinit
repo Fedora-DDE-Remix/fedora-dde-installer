@@ -12,6 +12,8 @@ init_log $LOG_FILE
 
 main () {
     if is_check_mode; then
+        mount -o remount,rw /usr /usr || warning "remount /usr failed"
+        enable_developer_mode
         if is_create_check_mode_user; then
             init_check_mode_user
             init_check_mode_workspace

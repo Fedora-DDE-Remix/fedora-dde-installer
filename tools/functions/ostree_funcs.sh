@@ -191,6 +191,10 @@ function first_backup()
     bash -c "LANGUAGE=$language deepin-immutable-ctl admin deploy --backup" && result=0
     if [ $result -eq 0 ]; then
         info "first backup ok"
+        if [ -f /tmp/deepin-immutable-ctl/backup-flag ]; then
+            # 移除备份标记文件，修复第一次安装系统升级前未备份系统的问题
+            rm /tmp/deepin-immutable-ctl/backup-flag || warning "remove backup-flag failed"
+        fi
         # 设置语言环境变量并deploy一次, deploy时会执行update-grub
         bash -c "LANGUAGE=$language LANG=${language}.UTF-8 deepin-immutable-ctl admin deploy --finalize" || error "first finalize failed"
     else

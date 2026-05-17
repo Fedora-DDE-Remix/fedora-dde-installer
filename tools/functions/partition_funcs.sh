@@ -587,6 +587,17 @@ setup_fstab() {
     setup_cryttab
 }
 
+# 修复/target下特殊目录的权限
+# 手动分区安装时，如果/tmp被挂载为独立分区，新文件系统根目录的默认权限为0755，
+# 而Linux FHS规范要求/tmp权限为1777（所有用户可读写 + sticky bit）。
+# 全盘安装时squashfs镜像中已预设正确权限，此处统一修正以确保一致性。
+fix_target_tmp_permissions() {
+    if [ -d /target/tmp ]; then
+        chmod 1777 /target/tmp
+        info "fix /target/tmp permissions to 1777"
+    fi
+}
+
 ## 判断是否全盘安装模式
 is_full_disk_mode() {
     #FullDiskMode = 0, 全盘安装

@@ -51,6 +51,7 @@ main() {
 
     # 设置环境变量
     export QT_QPA_PLATFORM=dxcb;xcb
+    export QT_FONT_DPI=96
 
     #屏蔽win键
     xmodmap -e "keycode 133 =" || true

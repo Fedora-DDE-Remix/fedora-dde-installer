@@ -95,9 +95,13 @@ add_user_to_existed_group() {
 
 add_user() {
     local username=$1
+    local uid=${2:-}
     local cmd_argc="-U -m --skel /etc/skel --shell /bin/bash"
     if [[ -d /home/${username} ]]; then
         cmd_argc="-U --shell /bin/bash"
+    fi
+    if [ -n "${uid}" ]; then
+        cmd_argc="${cmd_argc} -u ${uid}"
     fi
 
     info "Start create user: ${username}"
@@ -105,10 +109,27 @@ add_user() {
     info "useradd $cmd_argc ${username}"
 }
 
+# 从指定数字开始，找下一个未被使用的 UID
+next_available_uid() {
+    local uid=$1
+
+    while getent passwd "${uid}" >/dev/null 2>&1; do
+        uid=$((uid + 1))
+    done
+
+    echo "${uid}"
+}
+
 # 设置用户
 setup_username() {
     local username=$(installer_get "DI_USERNAME")
+    local preferred_uid=1000
+    local uid=${preferred_uid}
     [ -z "${username}" ] && error "Variable DI_USERNAME not set. Abort!"
+    if getent passwd "${preferred_uid}" >/dev/null 2>&1; then
+        uid=$(next_available_uid "${preferred_uid}")
+        warning "UID ${preferred_uid} already exists. Use UID ${uid} for user ${username}."
+    fi
 
     # 先修改home目录下的权限
     if [ -n "$(ls /home)" ]; then
@@ -127,7 +148,7 @@ setup_username() {
         ls /home | grep -v "$username" | xargs -I {} chown -hR root:root /home/{} || warning "chown -hR root:root /home failed!"
     fi
 
-    add_user $username
+    add_user $username $uid
 
     # 补全原用户目录框架和权限等属性
     cp -vfr -upP /etc/skel/* /home/${username}
@@ -240,14 +261,15 @@ setup_quick_login() {
         fi
 
         local state_user_path="/var/lib/lightdm/lightdm-deepin-greeter"
+        local username=$(installer_get "DI_USERNAME")
+        local uid=$(id -u "$username") || error "Failed to resolve UID for user ${username}"
         if [ ! -d ${state_user_path} ]; then
             mkdir -p  ${state_user_path}
         fi
 
-        local username=$(installer_get "DI_USERNAME")
         cat > "${state_user_path}/state_user" <<EOF
         [General]
-        last-user={"AuthType":1,"Name":"$username","Type":0,"Uid":1000}
+        last-user={"AuthType":1,"Name":"$username","Type":0,"Uid":${uid}}
         quicklogin-users=$username;
 EOF
         chown -R lightdm:lightdm ${state_user_path}/state_user
@@ -495,12 +517,13 @@ is_create_check_mode_user() {
 init_check_mode_user() {
     local username=$(installer_get DI_CM_USER)
     local password=$(installer_get DI_CM_PASSWORD)
+    local check_mode_uid=$(next_available_uid 1999)
     if [ -d /home/$username ]; then
         #生成一个唯一的审核模式用户，防止和保留用户功能保留的用户目录名重复
         username=$username-$(head -c 16 /dev/random | base64 | sed 's/[^a-z0-9]//g')
         installer_set DI_CM_USER $username
     fi
-    add_user $username
+    add_user $username $check_mode_uid
     add_user_to_existed_group "$username" "sudo"
     add_password $username $password
     info "init check mode user: <$username>"
@@ -593,6 +616,80 @@ set_systime_to_hc() {
     fi
 }
 
+# 用dde-dconfig设置org.deepin.region-format下的配置项，区域格式的大部分配置项在这个路径下
+dde_dconfig_deepin_region_format_set() {
+    local username=$1
+    local regionFormatKey=$2
+    local regionFormatValue=$3
+    if [ -n "${username}" ] && [ -n "${regionFormatKey}" ] && [ -n "${regionFormatValue}" ]; then
+        sudo -u "${username}" dde-dconfig set -a "" -r "org.deepin.region-format" -k "${regionFormatKey}" -v "${regionFormatValue}" || true
+        local resultRegionFormatValue=$(sudo -u "${username}" dde-dconfig get "" -r "org.deepin.region-format" -k "${regionFormatKey}" | tr -d "\""|| true)
+        if [ "${resultRegionFormatValue}" != "${regionFormatValue}" ]; then
+            warning "${regionFormatKey} set failed !"
+        fi
+    else
+        warning "dde_dconfig_deepin_region_format_set invalid param ! username=${username} regionFormatKey=${regionFormatKey} regionFormatValue=${regionFormatValue}"
+    fi
+}
+
+# 用dde-dconfig设置org.deepin.dde.daemon.format下的配置项，部分格式配置项在这个路径下，需要单独设置
+dde_dconfig_deepin_dde_daemon_format_set() {
+    local username=$1
+    local regionFormatKey=$2
+    local regionFormatValue=$3
+    if [ -n "${username}" ] && [ -n "${regionFormatKey}" ] && [ -n "${regionFormatValue}" ]; then
+        sudo -u "${username}" dde-dconfig set org.deepin.dde.daemon -r org.deepin.dde.daemon.format -k "${regionFormatKey}" -v "${regionFormatValue}" || true
+        local resultRegionFormatValue=$(sudo -u "${username}" dde-dconfig get org.deepin.dde.daemon -r org.deepin.dde.daemon.format -k "${regionFormatKey}" | tr -d "\""|| true)
+        if [ "${resultRegionFormatValue}" != "${regionFormatValue}" ]; then
+            warning "${regionFormatKey} set failed !"
+        fi
+    else
+        warning "dde_dconfig_deepin_dde_daemon_format_set invalid param ! username=${username} regionFormatKey=${regionFormatKey} regionFormatValue=${regionFormatValue}"
+    fi
+}
+
+# 设置货币格式比较特殊，除了org.deepin.region-format路径下的currencyFormat配置项外，还需要设置org.deepin.dde.daemon.format路径下的positiveCurrencyFormat和negativeCurrencyFormat这两个配置项，把其中的货币符号替换成新的货币符号
+dde_dconfig_currency_format_set() {
+    local username=$1
+    local newCurrencyFormat=$2
+
+    # 新建的账户没有登录的情况下获取的货币配置可能是空的，后面针对空值情况设置默认值
+    local resultCurrencyFormatValue=$(sudo -u "${username}" dde-dconfig get "" -r "org.deepin.region-format" -k "currencyFormat" | tr -d "\""|| true)
+    if [ -z "${resultCurrencyFormatValue}" ]; then
+        warning "get currencyFormat failed !"
+    fi
+
+    local resultPositiveCurrencyFormatValue=$(sudo -u "${username}" dde-dconfig get org.deepin.dde.daemon -r org.deepin.dde.daemon.format -k "positiveCurrencyFormat" | tr -d "\""|| true)
+    if [ -z "${resultPositiveCurrencyFormatValue}" ]; then
+        warning "get positiveCurrencyFormat failed !"
+    fi
+
+    local resultNegativeCurrencyFormatValue=$(sudo -u "${username}" dde-dconfig get org.deepin.dde.daemon -r org.deepin.dde.daemon.format -k "negativeCurrencyFormat" | tr -d "\""|| true)
+    if [ -z "${resultNegativeCurrencyFormatValue}" ]; then
+        warning "get negativeCurrencyFormat failed !"
+    fi
+
+    # 替换resultPositiveCurrencyFormatValue和resultNegativeCurrencyFormatValue中的货币符号为新的货币符号
+    local newPositiveCurrencyFormatValue=""
+    if [ -n "${resultPositiveCurrencyFormatValue}" ] && [ -n "${resultCurrencyFormatValue}" ]; then
+        newPositiveCurrencyFormatValue=$(echo "${resultPositiveCurrencyFormatValue}" | sed "s/${resultCurrencyFormatValue}/${newCurrencyFormat}/g")
+    else
+        newPositiveCurrencyFormatValue="${newCurrencyFormat}1.1"
+    fi
+
+    local newNegativeCurrencyFormatValue=""
+    if [ -n "${resultNegativeCurrencyFormatValue}" ] && [ -n "${resultCurrencyFormatValue}" ]; then
+        newNegativeCurrencyFormatValue=$(echo "${resultNegativeCurrencyFormatValue}" | sed "s/${resultCurrencyFormatValue}/${newCurrencyFormat}/g")
+    else
+        newNegativeCurrencyFormatValue="${newCurrencyFormat}-1.1"
+    fi
+
+    # 设置新的货币格式
+    dde_dconfig_deepin_dde_daemon_format_set "${username}" "positiveCurrencyFormat" "${newPositiveCurrencyFormatValue}"
+    dde_dconfig_deepin_dde_daemon_format_set "${username}" "negativeCurrencyFormat" "${newNegativeCurrencyFormatValue}"
+    dde_dconfig_deepin_region_format_set "${username}" "currencyFormat" "${newCurrencyFormat}"
+}
+
 set_region_fomat() {
     local username=""
 
@@ -605,33 +702,59 @@ set_region_fomat() {
 
     # 设置localname
     local localeConfig=$(installer_get "DI_REGION_FORMAT_LOCALE")
-    if [ -n "${localeConfig}" ]; then
-        sudo -u "${username}" dde-dconfig set -a "" -r "org.deepin.region-format" -k localeName -v "${localeConfig}" || true
-        local resultLocaleConfig=$(sudo -u "${username}" dde-dconfig get "" -r "org.deepin.region-format" -k localeName | tr -d "\""|| true)
-        if [ "${resultLocaleConfig}" != "${localeConfig}" ]; then
-            warning "locale set failed !"
-        fi
-    fi
+    dde_dconfig_deepin_region_format_set "${username}" "localeName" "${localeConfig}"
 
     # 设置地区
     local countryConfig=$(installer_get "DI_REGION")
-    if [ -n "${countryConfig}" ]; then
-        sudo -u "${username}" dde-dconfig set -a "" -r "org.deepin.region-format" -k country -v "${countryConfig}" || true
-        local resultCountryConfig=$(sudo -u "${username}" dde-dconfig get -a "" -r "org.deepin.region-format" -k country | tr -d "\"" || true)
-        if [ "${resultCountryConfig}" != "${countryConfig}" ]; then
-            warning "country set failed !"
-        fi
-    fi
+    dde_dconfig_deepin_region_format_set "${username}" "country" "${countryConfig}"
 
     # 设置区域格式
     local languageRegionConfig=$(installer_get "DI_REGION_FORMAT")
-    if [ -n "${languageRegionConfig}" ]; then
-        sudo -u "${username}" dde-dconfig set -a "" -r "org.deepin.region-format" -k languageRegion -v "${languageRegionConfig}" || true
-        local resultLanguageRegionConfig=$(sudo -u "${username}" dde-dconfig get -a "" -r "org.deepin.region-format" -k "languageRegion" | tr -d "\"" || true)
-        if [ "${resultLanguageRegionConfig}" != "${languageRegionConfig}" ]; then
-            warning "languageRegion set failed !"
-        fi
-    fi
+    dde_dconfig_deepin_region_format_set "${username}" "languageRegion" "${languageRegionConfig}"
+
+    # 设置一周第一天
+    local firstDayOfWeekConfig=$(installer_get "DI_REGION_FORMAT_FIRST_DAY_OF_WEEK_FORMAT")
+    dde_dconfig_deepin_region_format_set "${username}" "firstDayOfWeek" "${firstDayOfWeekConfig}"
+
+    # 设置短日期格式
+    local shortDateFormatConfig=$(installer_get "DI_REGION_FORMAT_SHORT_DATE_FORMAT")
+    dde_dconfig_deepin_region_format_set "${username}" "shortDateFormat" "${shortDateFormatConfig}"
+
+    # 设置长日期格式
+    local longDateFormatConfig=$(installer_get "DI_REGION_FORMAT_LONG_DATE_FORMAT")
+    dde_dconfig_deepin_region_format_set "${username}" "longDateFormat" "${longDateFormatConfig}"
+
+    # 设置短时间格式
+    local shortTimeFormatConfig=$(installer_get "DI_REGION_FORMAT_SHORT_TIME_FORMAT")
+    dde_dconfig_deepin_region_format_set "${username}" "shortTimeFormat" "${shortTimeFormatConfig}"
+
+    # 设置长时间格式
+    local longTimeFormatConfig=$(installer_get "DI_REGION_FORMAT_LONG_TIME_FORMAT")
+    dde_dconfig_deepin_region_format_set "${username}" "longTimeFormat" "${longTimeFormatConfig}"
+
+    # 设置数字格式
+    local numberFormatConfig=$(installer_get "DI_REGION_FORMAT_NUMBER_FORMAT")
+    dde_dconfig_deepin_region_format_set "${username}" "numberFormat" "${numberFormatConfig}"
+
+    # 设置纸张格式
+    local paperFormatConfig=$(installer_get "DI_REGION_FORMAT_PAPER_SIZE")
+    dde_dconfig_deepin_region_format_set "${username}" "paperFormat" "${paperFormatConfig}"
+
+    # 设置小数点符号
+    local decimalSymbol=$(installer_get "DI_REGION_FORMAT_DECIMAL_SYMBOL")
+    dde_dconfig_deepin_dde_daemon_format_set "${username}" "decimalSymbol" "${decimalSymbol}"
+
+    # 设置千位分隔符
+    local digitGroupingSymbol=$(installer_get "DI_REGION_FORMAT_DIGIT_GROUP_SEPARATOR")
+    dde_dconfig_deepin_dde_daemon_format_set "${username}" "digitGroupingSymbol" "${digitGroupingSymbol}"
+
+    # 设置数字分组
+    dde_dconfig_deepin_dde_daemon_format_set "${username}" "digitGrouping" "${numberFormatConfig}"
+
+    # 设置货币格式
+    local currencySymbolConfig=$(installer_get "DI_REGION_FORMAT_CURRENCY_SYMBOL")
+    dde_dconfig_currency_format_set "${username}" "${currencySymbolConfig}"
+
 
     # 设置locale.conf
     local region_format_local_set=$(installer_get "DI_REGION_FORMAT_LOCALE_SET")

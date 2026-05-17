@@ -87,7 +87,11 @@ install_package_apt() {
 install_all_package_apt() {
 	local DEB_DIR=$1
 	if ! is_empty_dir $DEB_DIR; then
-		ls "${DEB_DIR}"
+		local pkgs=$(echo ${DEB_DIR}/*.deb)
+        if [ "${pkgs}" = "${DEB_DIR}/*.deb" ]; then
+            return 0
+        fi
+        ls "${DEB_DIR}"
 		local result=0
 		DEBIAN_FRONTEND="noninteractive" apt-get -y --allow-downgrades install -o Dpkg::Options::="--force-confnew" ${DEB_DIR}/*.deb || result=$?
 		#如果result不等于0，说明安装失败

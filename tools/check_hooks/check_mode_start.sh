@@ -11,6 +11,8 @@ LOG_FILE="/var/log/deepin-installer/deepin-installer-check-mode.log"
 
 main() {
     ## 执行in_check脚本
+    USER_PASSWORD=$(installer_get "DI_CM_PASSWORD")
+    echo ${USER_PASSWORD} | sudo -S mount -o remount,rw /usr /usr
     in_check
 }
 

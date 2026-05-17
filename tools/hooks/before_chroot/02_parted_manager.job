@@ -16,3 +16,4 @@ parted_umount    # 分区卸载
 parted_manager   # 分区创建
 shrink_filesystem # 调整文件系统缩小35M
 parted_mount     # 分区挂载
+fix_target_tmp_permissions # 修复目标临时目录权限

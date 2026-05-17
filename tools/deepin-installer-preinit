@@ -78,10 +78,8 @@ main () {
 
         setup_lightdm_auto_login $(installer_get "LIVE_USERNAME")
 
-        fix_lightdm_user_session
         init_lightdm "deepin-installer-live-config"
     fi
 }
 
 main > $LOG_FILE 2>&1
-

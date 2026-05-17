@@ -11,6 +11,11 @@ LOG_FILE="/var/log/deepin-installer/deepin-installer-check-mode.log"
 
 main() {
     if is_check_mode; then
+        ## 将/usr目录挂载为读写模式, 避免在check_mode下执行安装器的脚本时，出现权限问题
+        local password=$(installer_get "DI_CM_PASSWORD")
+        echo ${password} | sudo -S mount -o remount,rw /usr /usr
+        disable_developer_mode
+
         ## 执行after_check脚本
         after_check
 

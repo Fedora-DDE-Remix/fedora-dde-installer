@@ -582,6 +582,9 @@ setup_ostree_snapshot() {
     # 设置/target中的安装模式为default模式
     deepin-installer-config set /target"${DI_CONFIG_FILE_ENV}" "DI_INSTALL_MODE" "default"
 
+    # 设置/target中禁用审核模式
+    deepin-installer-config set /target"${DI_CONFIG_FILE_ENV}" "DI_IS_CHECK_MODE" "false"
+
     # 启用后配置服务
     local is_firstboot_service_enabled=$(chroot /target systemctl is-enabled deepin-installer-first-boot)
     info "deepin-installer-first-boot service status in target is : ${is_firstboot_service_enabled}"
@@ -604,6 +607,11 @@ setup_ostree_snapshot() {
      # 还原/target中的安装模式为当前设置的模式
     local install_mode=$(installer_get "DI_INSTALL_MODE")
     deepin-installer-config set /target"${DI_CONFIG_FILE_ENV}" "DI_INSTALL_MODE" "${install_mode}"
+
+     # 设置/target中审核模式启用状态为当前设置
+    local is_check_mode=$(installer_get "DI_IS_CHECK_MODE")
+    deepin-installer-config set /target"${DI_CONFIG_FILE_ENV}" "DI_IS_CHECK_MODE" "${is_check_mode}"
+    
 
     # 还原/target中的firstboot服务状态
     if [ x"${is_firstboot_service_enabled}" = xenabled ]; then
@@ -1085,14 +1093,44 @@ init_check_mode_lightdm() {
 cat > "${conf_file}" <<EOF
 [Seat:*]
 autologin-user=${username}
-user-session=dde-x11
+user-session=deepin
 greeter-session=lightdm-deepin-greeter
 display-stopped-script=bash $DI_INSTALL_TOOLS_DIR_ENV/check_hooks/check_mode_cleanup.sh
 EOF
 }
 
 cleanup_check_mode() {
+    if [ -f /etc/xdg/autostart/check_mode_start.desktop ]; then
+        rm -f /etc/xdg/autostart/check_mode_start.desktop
+    fi
+
+    if [ -f /usr/share/applications/check_mode_start.desktop ]; then
+        rm -f /usr/share/applications/check_mode_start.desktop
+    fi
+
+    if [ -f /usr/share/applications/check_mode_quit.desktop ]; then
+        rm -f /usr/share/applications/check_mode_quit.desktop
+    fi
+
     local username=$(installer_get DI_CM_USER)
+
+    # 仅处理 /media/${username} 下的直接挂载点，避免误删挂载介质内的目录
+    # 仅在成功卸载后删除空挂载点目录，最后尝试删除空的用户目录
+    if [ -d /media/${username} ]; then
+        find /media/"${username}" -mindepth 1 -maxdepth 1 -type d | while read -r dir; do
+            if mountpoint -q "${dir}"; then
+                if ! umount -Rlf "${dir}"; then
+                    warning "umount -Rlf ${dir} failed!"
+                    continue
+                fi
+            fi
+
+            rmdir "${dir}" 2>/dev/null || true
+        done
+
+        rmdir /media/"${username}" 2>/dev/null || true
+    fi
+
     delete_user $username
     installer_set DI_IS_CHECK_MODE "false"
 }
@@ -1108,7 +1146,7 @@ init_check_mode_workspace() {
     local username=$(installer_get DI_CM_USER)
     local start_file="/home/$username/Desktop/check_mode_start.desktop"
     if [ "x$autoStart" = "xtrue" ]; then
-        start_file="/home/$username/.config/autostart/check_mode_start.desktop"
+        start_file="/etc/xdg/autostart/check_mode_start.desktop"
     fi
 
     cat > $start_file << EOF
@@ -1120,6 +1158,8 @@ Terminal=false
 Type=Application
 EOF
 
+    cp -v  $start_file /usr/share/applications/check_mode_start.desktop
+
     cat > /home/$username/Desktop/check_mode_quit.desktop << EOF
 [Desktop Entry]
 Exec=bash $DI_INSTALL_TOOLS_DIR_ENV/check_hooks/check_mode_quit.sh
@@ -1128,6 +1168,8 @@ StartupNotify=false
 Terminal=false
 Type=Application
 EOF
+
+    cp -v /home/$username/Desktop/check_mode_quit.desktop /usr/share/applications/check_mode_quit.desktop
 }
 
 before_check() {
@@ -1165,7 +1207,8 @@ in_check() {
     local autoStart=$(installer_get DI_AUTO_CHECK_MODE)
     if [ "x$autoStart" = "xtrue" ]; then
         info "is auto check mode, now to after check!"
-        /usr/lib/qt6/bin/qdbus --system --literal org.freedesktop.login1 /org/freedesktop/login1/user/self org.freedesktop.login1.User.Terminate
+        /usr/lib/qt6/bin/qdbus --session --literal  org.deepin.dde.SessionManager1 /org/deepin/dde/SessionManager1  org.deepin.dde.SessionManager1.RequestLogout 
+
     fi
 }
 
@@ -1608,4 +1651,19 @@ reade_edition_name_from_cmdline() {
             installer_set "DI_EDITION_NAME" "${editionName}"
         fi
     done
+}
+
+enable_developer_mode() {
+    [ -d /var/lib/deepin/developer-mode ] || mkdir -pv /var/lib/deepin/developer-mode
+    echo -n 1 > /var/lib/deepin/developer-mode/enabled
+    # 1075和v25 开发者模式由deepin-elf-verify控制，该服务启动较早，所以这里修改
+    #  /var/lib/deepin/developer-mode/enabled并不能马上生效。需要重启服务
+    systemctl restart deepin-elf-verify
+}
+
+disable_developer_mode() {
+    if [ -f /var/lib/deepin/developer-mode/enabled ]; then
+        rm -f /var/lib/deepin/developer-mode/enabled
+        systemctl restart deepin-elf-verify
+    fi
 }
