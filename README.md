@@ -41,14 +41,16 @@
 
 ## 开发状态与验证边界
 
-当前为开发版。已经通过不接触真实磁盘的纯 C++ 工作流回归测试和 Python 后端
-模拟测试，以及启动脚本语法、资源路径和打包配置检查。
+当前为开发版。2026-11-22 的 [GitHub Actions 构建](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353)
+已通过完整 Qt 6 / DTK 6 GUI 编译、Fedora 45 x86_64 RPM/SRPM 打包和两项 CTest
+回归测试；[构建产物可在这里下载](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353/artifacts/14760909567)。
+验证提交为 `0bd3bb575d7322ace5579f89303cc1864d40d9c5`。本次直接使用正式 COPR
+仓库中的开发包，未启用临时 SDK 补建。
 
-**完整 Qt 6 / DTK 6 GUI 编译、Fedora RPM 构建、Live ISO 虚拟机安装及首次启动
-尚未完成验证。** 安全测试通过不代表 ISO 已能成功安装或启动。首轮 GitHub
-Actions 安全测试通过，RPM 任务停在 DTK Gui/Widget 依赖解析，尚未开始编译安装器。
-项目的 COPR 仍在持续构建桌面软件包。CI 默认直接使用 COPR 发布的开发包；相关
-产物入库后，重新运行普通 RPM 工作流即可继续验证。手动触发工作流时，可显式选择
+**Live ISO 虚拟机安装、移除 ISO 后首次启动及 aarch64 构建尚未完成验证。**
+已通过的工作流及后端测试不会操作真实磁盘。
+
+CI 默认直接使用 COPR 发布的开发包。手动触发工作流时，可显式选择
 `bootstrap_widget`，在临时容器内用固定配方补建 Widget SDK；此选项默认关闭。
 依赖缺失或编译失败会使任务失败，详细输入记录见构建文档。
 

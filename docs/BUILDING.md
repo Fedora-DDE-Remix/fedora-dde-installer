@@ -119,19 +119,28 @@ installer/autostart configuration during finalization.
 
 The workflow first runs the non-destructive tests without GUI dependencies. A
 Fedora 45 container then installs the declared dependencies from COPR and builds
-source and binary RPMs for x86_64. The desktop COPR is still being populated;
-rerun the normal workflow once the required development packages are published.
+source and binary RPMs for x86_64. Required development packages must be built
+and published in the normal repository before this workflow can use them.
 Failure to resolve a required COPR package is a build failure. aarch64 RPMs must
 be built on an aarch64 builder; the x86_64 CI result does not validate them.
 
-The first public workflow run
-[`45019219116`](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45019219116)
-passed the safe tests but stopped at dependency resolution: `cmake(Dtk6Gui)` and
-`cmake(Dtk6Widget)` were unavailable to that Fedora 45 container. COPR build
-`11374228` produced `dtk6gui-devel-6.7.54-2.fc45` and its build log confirms the
-correct `cmake(Dtk6Gui)` provide. The project maintainer confirmed that the COPR
-build sequence was still in progress. This dependency failure occurred before
-compiling the installer and does not indicate an incorrect CMake package name.
+On 2026-11-22, workflow run
+[`45039833353`](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353)
+successfully built commit `0bd3bb575d7322ace5579f89303cc1864d40d9c5` using the
+published COPR packages, with the optional SDK bootstrap disabled. Full Qt 6 /
+DTK 6 GUI compilation, RPM packaging, both CTest suites and artifact upload
+passed. The [artifact](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353/artifacts/14760909567)
+contains the application RPM, SRPM, debuginfo and debugsource RPMs. Live-image
+installation and target-system boot have not yet been validated.
+
+Earlier dependency failures were caused by unpublished repository metadata:
+the COPR project used `devel_mode`, and its Gui/Widget builds completed after
+the previous production publication. The successful production repository
+[regeneration](https://copr.fedorainfracloud.org/coprs/mozixun/Fedora-DDE-Remix/action/2939948/)
+at 15:38 UTC made those SDKs available to ordinary DNF clients. When COPR's
+[manual repository mode](https://docs.copr.fedorainfracloud.org/user_documentation.html#creating-repositories-manually)
+is enabled, use **Regenerate Repositories** after the desired package set is
+ready; a successful package build alone does not publish it to that repository.
 
 For developer testing, the optional CI helper
 `.github/scripts/bootstrap-dtk-widget.sh` can build the Widget SDK in the
