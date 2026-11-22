@@ -17,10 +17,12 @@ target_include_directories(FedoraDDEInstallerCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/interfaces)
 target_link_libraries(FedoraDDEInstallerCore PUBLIC ${LINK_LIBS})
 
-# Release builds resolve settings through environment variables, so the real
+# Non-Debug builds resolve settings through environment variables, so the real
 # planner can be exercised with an isolated temporary configuration. Debug
 # builds intentionally pin the live installer configuration path instead.
-if(BUILD_TESTING AND CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+# Fedora's RPM macros provide compiler flags directly and can leave the build
+# type unset. Include that mode and None in the planner test as well.
+if(BUILD_TESTING AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_executable(installer-partition-layout-test tests/PartitionLayoutTest.cpp
         modules/task_partitions/PartitionTaskManager.cpp)
     target_include_directories(installer-partition-layout-test PRIVATE modules/task_partitions)

@@ -86,7 +86,7 @@
 ## 验证与发布门槛
 
 本地安全测试覆盖 Python 后端及 C++ 工作流；它们模拟所有外部系统命令，不会操作
-真实分区。GUI 的 Release 类构建还包含直接调用真实规划器和 helper 解析代码的
+真实分区。GUI 的非 Debug 构建（包括未显式指定构建类型的 Fedora RPM）还包含直接调用真实规划器和 helper 解析代码的
 `installer-partition-layout` 测试，覆盖 UEFI/BIOS、512/4096 字节扇区、手动布局、
 helper 协议及分区路径回写。实际运行记录应关联到对应提交的 GitHub Actions。
 
