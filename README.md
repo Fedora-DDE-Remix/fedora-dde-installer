@@ -58,13 +58,17 @@ Wi-Fi/VPN，不执行 Anaconda/Kickstart 的任意安装后脚本。差异、ISO
 
 ## 开发状态与验证边界
 
-当前为开发版。0.1.0 基线在 2026-11-22 的 [GitHub Actions 构建](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353)
-已通过完整 Qt 6 / DTK 6 GUI 编译、Fedora 45 x86_64 RPM/SRPM 打包和两项 CTest
-回归测试；[构建产物可在这里下载](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353/artifacts/14760909567)。
-验证提交为 `0bd3bb575d7322ace5579f89303cc1864d40d9c5`。本次直接使用正式 COPR
-仓库中的开发包，未启用临时 SDK 补建。
-0.2.0 的完整编译和回归结果以 [GitHub Actions](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions)
-对应提交的运行记录为准，不能用上述旧构建证明新版本已通过。
+当前为开发版。2026-11-23（北京时间）的 [GitHub Actions 构建](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45055520645)
+已完成 **0.2.0 的完整 Qt 6 / DTK 6 GUI 编译、Fedora 45 x86_64 RPM/SRPM 打包**。
+验证提交为 `320197121fb194a327e7fcd60f5c552c901add4d`，直接使用正式 COPR
+开发包，未启用临时 SDK 补建。三项 CTest 均实际执行并通过：C++ 工作流、
+包含 80 项 Python 用例的后端测试，以及真实 C++ 分区规划器/协议回归。
+[安装器构建产物](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45055520645/artifacts/14767373498)
+包含主 RPM、SRPM、debuginfo 和 debugsource。
+
+配套 DDM `0.5.0-6` 也已[构建成功并核对 RPM 内的 PAM/preset 文件](https://github.com/Fedora-DDE-Remix/Deepin-Desktop-Environment/actions/runs/45050056498)，
+[DDM 产物在此下载](https://github.com/Fedora-DDE-Remix/Deepin-Desktop-Environment/actions/runs/45050056498/artifacts/14764983663)。
+这些是 Actions 构建产物；本轮没有向 COPR 提交新版 DDM 构建或发布仓库元数据。
 
 **Live ISO 虚拟机安装、移除 ISO 后首次启动及 aarch64 构建尚未完成验证。**
 已通过的工作流及后端测试不会操作真实磁盘。

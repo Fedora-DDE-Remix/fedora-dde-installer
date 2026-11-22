@@ -124,14 +124,38 @@ and published in the normal repository before this workflow can use them.
 Failure to resolve a required COPR package is a build failure. aarch64 RPMs must
 be built on an aarch64 builder; the x86_64 CI result does not validate them.
 
-On 2026-11-22, workflow run
-[`45039833353`](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353)
-successfully built commit `0bd3bb575d7322ace5579f89303cc1864d40d9c5` using the
+On 2026-11-23 (Asia/Shanghai), workflow run
+[`45055520645`](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45055520645)
+successfully built commit `320197121fb194a327e7fcd60f5c552c901add4d` using the
 published COPR packages, with the optional SDK bootstrap disabled. Full Qt 6 /
-DTK 6 GUI compilation, RPM packaging, both CTest suites and artifact upload
-passed. The [artifact](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353/artifacts/14760909567)
-contains the application RPM, SRPM, debuginfo and debugsource RPMs. Live-image
-installation and target-system boot have not yet been validated.
+DTK 6 GUI compilation, Fedora 45 x86_64 RPM/SRPM packaging and artifact upload
+passed. All three CTest entries actually ran: `installer-workflow`,
+`installer-backend` (80 Python cases) and `installer-partition-layout`. The last
+test exercises the real C++ planners and helper protocol in temporary files,
+including both firmware modes and 512/4096-byte sectors, without disk operations.
+
+The [installer artifact](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45055520645/artifacts/14767373498)
+contains `fedora-dde-installer-0.2.0-0.1.fc45.x86_64.rpm`, its SRPM, debuginfo and
+debugsource. The archive SHA-256 is
+`41163a0c10d26d678ae8b23ebce63199699e4e561a5bb9826665437b5aaa0a2d`.
+
+The matching Fedora PAM recipe produced `ddm-0.5.0-6.fc45.x86_64.rpm` in
+[DDM run 45050056498](https://github.com/Fedora-DDE-Remix/Deepin-Desktop-Environment/actions/runs/45050056498)
+at commit `75a1dc8602ef1d8ee09b9258ada23cfa5ee7f987`. That job extracted and
+compared both PAM files and the systemd preset from the main RPM. Its
+[artifact](https://github.com/Fedora-DDE-Remix/Deepin-Desktop-Environment/actions/runs/45050056498/artifacts/14764983663)
+also contains the recipe, input hashes, dependency list and source commit.
+
+These Actions workflows do not submit COPR builds or publish repository
+metadata. Supply the verified DDM RPM to the ISO compose, or rebuild and publish
+the updated DDM recipe in COPR before resolving the installer's runtime
+requirements there. A runtime upgrade inside a running Live session does not
+change the original read-only payload; compose the required versions into the
+image itself. See [FEDORA_ALIGNMENT.md](FEDORA_ALIGNMENT.md) for payload
+prerequisites and the remaining Anaconda comparison items.
+
+Live-image installation, DDM login, target-system boot, Secure Boot and aarch64
+have not yet been validated by these jobs.
 
 Earlier dependency failures were caused by unpublished repository metadata:
 the COPR project used `devel_mode`, and its Gui/Widget builds completed after

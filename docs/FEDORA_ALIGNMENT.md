@@ -95,7 +95,7 @@ helper 协议及分区路径回写。实际运行记录应关联到对应提交�
 | 验收项 | 应比较的结果 |
 |---|---|
 | 完整安装 | 同会话配置账户；配置失败后重试；完成前不自动重启；移除 ISO 后正常启动 |
-| 磁盘 | GPT 类型、ESP/bios_grub、独立 boot、Btrfs root/home、fstab 与 zram；保留 home 内容不变 |
+| 磁盘 | GPT 类型、ESP/bios_grub、独立 boot、Btrfs root/home、fstab 与 zram；保留 home 的用户数据，不删除内容；允许写入本次选择的用户配置 |
 | 软件包 | 对相同 payload 比较已安装 RPM 集合及 `rpm -Va`，逐条解释品牌、桌面和安装器包移除差异 |
 | 启动 | 普通/救援 BLS、grubenv 默认项、initramfs 的磁盘与控制台模块；没有 `rd.live.*` 或 `root=live:` |
 | 登录 | 首个用户 UID/GID、wheel/sudo、锁定 root、DDM/Treeland 登录、重试未重复创建用户 |
