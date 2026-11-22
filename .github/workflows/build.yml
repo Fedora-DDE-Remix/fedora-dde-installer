@@ -67,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
-          git archive --format=tar --prefix=fedora-dde-installer-main/ HEAD |
+          git -c safe.directory="$PWD" archive --format=tar --prefix=fedora-dde-installer-main/ HEAD |
             gzip -n > rpmbuild/SOURCES/fedora-dde-installer-main.tar.gz
           rpmbuild --define "_topdir $PWD/rpmbuild" -ba packaging/fedora-dde-installer.spec
       - name: Save RPMs
