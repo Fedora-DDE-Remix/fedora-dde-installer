@@ -80,6 +80,10 @@
         <source>Select a install mode</source>
         <translation>Select a install mode</translation>
     </message>
+    <message>
+        <source>Creates boot partitions and a compressed Btrfs filesystem. Root and /home share the remaining space. Swap uses zram. All data on the selected disk will be erased.</source>
+        <translation>Creates boot partitions and a compressed Btrfs filesystem. Root and /home share the remaining space. Swap uses zram. All data on the selected disk will be erased.</translation>
+    </message>
 </context>
 <context>
     <name>InstallApplicationFrame</name>
@@ -192,6 +196,10 @@
         <location filename="../src/modules/frame_partitions/MultipleDiskPartitionFrame.cpp" line="936"/>
         <source>keep user data</source>
         <translation>keep user data</translation>
+    </message>
+    <message>
+        <source>Creates boot partitions and a compressed Btrfs filesystem on the selected disk. Root and /home share space unless a separate data disk is selected. Swap uses zram. All data on the selected disk will be erased.</source>
+        <translation>Creates boot partitions and a compressed Btrfs filesystem on the selected disk. Root and /home share space unless a separate data disk is selected. Swap uses zram. All data on the selected disk will be erased.</translation>
     </message>
 </context>
 <context>
@@ -2086,18 +2094,6 @@ If you need more help, you can join the official group, call the 400 hotline or 
         <translation>/persistent Partition, Data Partition</translation>
     </message>
     <message>
-        <location filename="../src/widgets/HelpDialog.cpp" line="129"/>
-        <source>/swap Partition, SWAP Partition</source>
-        <translation>/swap Partition, SWAP Partition</translation>
-    </message>
-    <message>
-        <location filename="../src/widgets/HelpDialog.cpp" line="129"/>
-        <source>Size: Based on the amount of physical memory
-</source>
-        <translation>Size: Based on the amount of physical memory
-</translation>
-    </message>
-    <message>
         <location filename="../src/widgets/HelpDialog.cpp" line="140"/>
         <source>Create Init Backup:</source>
         <translation>Create Init Backup:</translation>
@@ -2120,11 +2116,6 @@ Create init backup cost more time.</translation>
 </source>
         <translation>/boot/efi: System boot partition, stores boot files.
 </translation>
-    </message>
-    <message>
-        <location filename="../src/widgets/HelpDialog.cpp" line="164"/>
-        <source>/SWAP: System swap partition, ensure system performance when there is insufficient memory.</source>
-        <translation>/SWAP: System swap partition, ensure system performance when there is insufficient memory.</translation>
     </message>
     <message>
         <location filename="../src/widgets/InstallConfirmDialog.cpp" line="119"/>
@@ -2326,6 +2317,70 @@ Create init backup cost more time.</translation>
         <source>Deepin Installer</source>
         <translation>Deepin Installer</translation>
     </message>
+    <message>
+        <source>Legacy BIOS installation requires a GPT or MBR partition table.</source>
+        <translation>Legacy BIOS installation requires a GPT or MBR partition table.</translation>
+    </message>
+    <message>
+        <source>BIOS boot (no filesystem)</source>
+        <translation>BIOS boot (no filesystem)</translation>
+    </message>
+    <message>
+        <source>Reserved for GRUB on a BIOS/GPT disk; this partition is not formatted or mounted.</source>
+        <translation>Reserved for GRUB on a BIOS/GPT disk; this partition is not formatted or mounted.</translation>
+    </message>
+    <message>
+        <source>The BIOS boot partition must be at least 1 MiB, unformatted and without a mount point.</source>
+        <translation>The BIOS boot partition must be at least 1 MiB, unformatted and without a mount point.</translation>
+    </message>
+    <message>
+        <source>Create an unformatted BIOS boot partition of at least 1 MiB on the GPT disk.</source>
+        <translation>Create an unformatted BIOS boot partition of at least 1 MiB on the GPT disk.</translation>
+    </message>
+    <message>
+        <source>Btrfs root and /home share system space. Set data space above zero only for a separate /home partition.</source>
+        <translation>Btrfs root and /home share system space. Set data space above zero only for a separate /home partition.</translation>
+    </message>
+    <message>
+        <source>BIOS boot partition (GPT)</source>
+        <translation>BIOS boot partition (GPT)</translation>
+    </message>
+    <message>
+        <source>At least 1 MiB, with no filesystem or mount point. Not needed on an existing MBR disk.</source>
+        <translation>At least 1 MiB, with no filesystem or mount point. Not needed on an existing MBR disk.</translation>
+    </message>
+    <message>
+        <source>Btrfs by default; ext4 and XFS are also supported.
+Root and /home share Btrfs space unless /home is separate.
+</source>
+        <translation>Btrfs by default; ext4 and XFS are also supported.
+Root and /home share Btrfs space unless /home is separate.
+</translation>
+    </message>
+    <message>
+        <source>Swap (optional)</source>
+        <translation>Swap (optional)</translation>
+    </message>
+    <message>
+        <source>zram provides swap by default. A linux-swap partition is optional and has no mount point.</source>
+        <translation>zram provides swap by default. A linux-swap partition is optional and has no mount point.</translation>
+    </message>
+    <message>
+        <source>/boot: Separate ext4 boot partition.
+</source>
+        <translation>/boot: Separate ext4 boot partition.
+</translation>
+    </message>
+    <message>
+        <source>BIOS boot: An unformatted 1 MiB area on GPT disks.
+</source>
+        <translation>BIOS boot: An unformatted 1 MiB area on GPT disks.
+</translation>
+    </message>
+    <message>
+        <source>Swap uses zram by default. An on-disk swap partition is optional.</source>
+        <translation>Swap uses zram by default. An on-disk swap partition is optional.</translation>
+    </message>
 </context>
 <context>
     <name>SelectFileWidget</name>
@@ -2341,6 +2396,10 @@ Create init backup cost more time.</translation>
         <location filename="../src/modules/frame_partitions/SeniorPartitionFrame.cpp" line="434"/>
         <source>Are you sure to cancel encrypt %1?</source>
         <translation>Are you sure to cancel encrypt %1?</translation>
+    </message>
+    <message>
+        <source>Format root and a separate ext4 /boot. UEFI needs FAT32 /boot/efi; BIOS on GPT needs an unformatted BIOS boot partition. Btrfs root and /home share space unless /home is separate. Swap is optional.</source>
+        <translation>Format root and a separate ext4 /boot. UEFI needs FAT32 /boot/efi; BIOS on GPT needs an unformatted BIOS boot partition. Btrfs root and /home share space unless /home is separate. Swap is optional.</translation>
     </message>
 </context>
 <context>

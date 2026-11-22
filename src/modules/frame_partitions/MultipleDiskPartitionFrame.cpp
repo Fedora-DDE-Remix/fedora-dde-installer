@@ -631,11 +631,8 @@ void MultipleDiskPartitionFrame::updateTipInfo(const QString &text)
 bool MultipleDiskPartitionFrame::checkSysDiskSpace(const SDeviceInfo &info)
 {
     //校验系统分区大小
-    auto efiSize = CommonFunc::isUEFI() ? PartitionFullDiskManager::instance()->getConfigPartitionSize(info.size, gEFILabel) : 0;
-    auto bootSize = PartitionFullDiskManager::instance()->getConfigPartitionSize(info.size, gBootLabel);
     auto rootSize = PartitionFullDiskManager::instance()->getConfigPartitionSize(info.size, gRootaLabel);
-    auto swapSize = PartitionFullDiskManager::instance()->getConfigPartitionSize(info.size, gSWAPLabel);
-    qint64 deviceMinSize = efiSize + bootSize + rootSize + swapSize;
+    qint64 deviceMinSize = PartitionFullDiskManager::instance()->getOtherPartitionSize(info.size) + rootSize;
 
     if (info.size < deviceMinSize) {
         DDialog dialog;
@@ -684,7 +681,7 @@ void MultipleDiskPartitionFrame::updateTs()
         m_btnExtand->setText(CommonFunc::wrapWords(tr("Enable Volume Extension"), m_btnExtand->width() - m_btnExtand->iconSize().width() - spacinValue, m_btnExtand->fontMetrics()));
         m_btnKeepData->setText(CommonFunc::wrapWords(tr("keep user data"), m_btnKeepData->width() - m_btnKeepData->iconSize().width() - spacinValue, m_btnKeepData->fontMetrics()));
 
-        m_modeTip_1->setText(tr("Creates a boot partition, swap, and a writable root filesystem on the selected disk. All data on that disk will be erased."));
+        m_modeTip_1->setText(tr("Creates boot partitions and a compressed Btrfs filesystem on the selected disk. Root and /home share space unless a separate data disk is selected. Swap uses zram. All data on the selected disk will be erased."));
         m_modeTip_1->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
         m_modeTip_1->adjustSize();
         m_modeTip_2->setText(::QObject::tr("Encrypt the whole disk to prevent data theft."));        

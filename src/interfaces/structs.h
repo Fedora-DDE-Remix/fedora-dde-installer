@@ -60,6 +60,7 @@ struct SPartitionInfo
     bool isStartPoint = true;      // 开始位置还是结束位置进行分区
     qint64 deviceSize = 0;      // 分区所对应的设备的size
     bool isEFIPartition = false;    // 是否是EFI分区
+    bool isBiosBoot = false;        // GPT BIOS boot area; no filesystem or mount point
     bool isMergeVG      = false;    // 标记该分区是否创建合成VG
     bool isNeedFormat   = false;    // 标记该分区是否需要格式化
     bool isStartDevicePart  = false; // 标记该分区是否为启动盘设备的分区
@@ -115,6 +116,7 @@ struct SPartitionInfo
         json.insert("isStartPoint", this->isStartPoint);
         json.insert("deviceSize", QString::number(this->deviceSize));
         json.insert("isEFIPartition", this->isEFIPartition);
+        json.insert("isBiosBoot", this->isBiosBoot);
         json.insert("isMergeVG", this->isMergeVG);
         json.insert("isNeedFormat", this->isNeedFormat);
         json.insert("isStartDevicePart", this->isStartDevicePart);
@@ -376,6 +378,7 @@ struct SDataInfo {
     EPartitionType partitionType;    // 分区的类型
     bool isMergeVG = false;
     bool isNeedFormat   = false;    // 标记该分区是否需要格式化
+    bool isBiosBoot = false;
     bool isCanEncrypt;
     bool isEncrypt;
 };

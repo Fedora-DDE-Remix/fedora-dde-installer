@@ -20,9 +20,9 @@ EditPartitionDialog::EditPartitionDialog(const SPartitionInfo &info, QWidget *pa
     m_tipsLabel->setWordWrap(true);
 
     m_formatPartition = new DCheckBox(::QObject::tr("Format the partition"));
-    m_formatPartition->setCheckState(Qt::CheckState::Checked);
+    m_formatPartition->setChecked(!info.isBiosBoot);
     // path 为空说明是新建的分区，需要强制格式化
-    m_formatPartition->setEnabled(!m_editPartitionInfo.path.isEmpty());
+    m_formatPartition->setEnabled(!info.isBiosBoot && !m_editPartitionInfo.path.isEmpty());
     if (gNeedFormatMountPoints.contains(m_editPartitionInfo.mountPoint)) {
         m_formatPartition->setEnabled(false);
     }
@@ -43,7 +43,8 @@ EditPartitionDialog::EditPartitionDialog(const SPartitionInfo &info, QWidget *pa
     m_fileSystemCmb = new DComboBox(this);
     m_fileSystemCmb->setFixedSize(320, 36);
     m_fileSystemCmb->addItems(getFileSystemList());
-    m_fileSystemCmb->setCurrentText(CommonFunc::getFileSystem(m_editPartitionInfo.filesystem));
+    m_fileSystemCmb->setCurrentText(info.isBiosBoot ? ::QObject::tr("BIOS boot (no filesystem)")
+                                               : CommonFunc::getFileSystem(m_editPartitionInfo.filesystem));
     connect(m_fileSystemCmb, &DComboBox::currentTextChanged, this, [=](const QString &text){
         if (text == "linux-swap" || text == "lvm2 pv") {
             m_mountPointCmb->setEnabled(false);
@@ -73,6 +74,7 @@ EditPartitionDialog::EditPartitionDialog(const SPartitionInfo &info, QWidget *pa
     m_mountPointCmb->setFixedSize(320, 36);
     m_mountPointCmb->addItems(getMountPointList());
     m_mountPointCmb->setCurrentText(CommonFunc::getPartitionMountText(m_editPartitionInfo.mountPoint));
+    m_mountPointCmb->setEnabled(!info.isBiosBoot);
     connect(m_mountPointCmb, &DComboBox::currentTextChanged, this, [=](const QString &text){
         m_editPartitionInfo.mountPoint = CommonFunc::getPartitionMountPoint(text);
         m_tipsLabel->setText(QString());
@@ -124,6 +126,7 @@ EditPartitionDialog::EditPartitionDialog(const SPartitionInfo &info, QWidget *pa
     connect(this, &DDialog::closed, this, [=]{updateErrTips(""); reject();});
     connect(m_okBtn, &QAbstractButton::clicked, this, [=]{
         QString err = QString();
+        m_editPartitionInfo.isNeedFormat = m_formatPartition->isChecked();
         if (!PartitionSeniorManager::instance()->checkDialogNextEnable(m_editPartitionInfo, err)) {
             updateErrTips(err);
             return;
@@ -161,6 +164,10 @@ void EditPartitionDialog::updateErrTips(const QString &err)
 
 QStringList EditPartitionDialog::getFileSystemList()
 {
+    // Reusing a BIOS embedding area never offers mkfs. Delete and recreate
+    // the partition explicitly if its purpose is to change.
+    if (m_editPartitionInfo.isBiosBoot)
+        return {::QObject::tr("BIOS boot (no filesystem)")};
     QStringList list = {"ext4", "xfs", "btrfs", "linux-swap"};
     if (CommonFunc::isUEFI() && !list.contains("vfat"))  {
         if(canUseEFI(m_editPartitionInfo)) {

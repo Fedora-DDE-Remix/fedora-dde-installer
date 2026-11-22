@@ -13,21 +13,8 @@
     ]
   },
   {
-    "label": "SWAP",
-    "filesystem": "linux-swap",
-    "mountPoint": "swap",
-    "alignStart": true,
-    "platform": [
-      "x86",
-      "arm"
-    ],
-    "OSVersion": [
-      "45"
-    ]
-  },
-  {
     "label": "Root",
-    "filesystem": "ext4",
+    "filesystem": "btrfs",
     "mountPoint": "/",
     "alignStart": true,
     "platform": [

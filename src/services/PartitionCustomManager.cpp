@@ -35,12 +35,17 @@ void PartitionCustomManager::newPartition(const SDeviceInfo &devName, const SPar
     bool isFormat = freeName.isNeedFormat;
     SDeviceInfo dev = findDev(devName);
     if (!dev.name.isEmpty()) {
-        qint64 systemMinSpace = getSystemMinSpace();
+        qint64 systemMinSpace = getSystemMinSpace(dev);
 
         if (CommonFunc::isUEFI() && getEFIPartition().id.isEmpty()) {
             SPartitionInfo efi = CommonFunc::getEFIPartitionInfo(dev);
             efi.isNeedFormat = isFormat;
             PartitionSeniorManager::instance()->newPartition(devName, freeName, efi);
+        }
+
+        if (!CommonFunc::isUEFI() && dev.type == EDisklabelType::GPT && !hasBIOSBootPartition(dev)) {
+            SPartitionInfo biosBoot = CommonFunc::getBIOSBootPartitionInfo(dev);
+            PartitionSeniorManager::instance()->newPartition(devName, freeName, biosBoot);
         }
 
         SPartitionInfo newBootPart = CommonFunc::getBootPartitionInfo(dev);
@@ -51,15 +56,6 @@ void PartitionCustomManager::newPartition(const SDeviceInfo &devName, const SPar
         SPartitionInfo roota = getRootaPartitionInfo(rootaSize, dev);
         roota.isNeedFormat = isFormat;
         PartitionSeniorManager::instance()->newPartition(devName, freeName, roota);
-
-        if (!existSWAPPartition()) {
-            SPartitionInfo swap = getSWAPPartitionInfo(dev);
-            swap.isNeedFormat = isFormat;
-            if (!CommonFunc::isUEFI()) {
-                swap.partitionType = EPartitionType::PartitionTypeLogical;
-            }
-            PartitionSeniorManager::instance()->newPartition(devName, freeName, swap);
-        }
 
         // 创建数据空间分区
         if (dataSpace > 0) {
@@ -74,7 +70,7 @@ void PartitionCustomManager::newPartition(const SDeviceInfo &devName, const SPar
 
             SPartitionInfo data = getDataPartitionInfo(dataSpace, dev);
             data.isNeedFormat = isFormat;
-            if (!CommonFunc::isUEFI()) {
+            if (dev.type == EDisklabelType::MsDos) {
                 data.partitionType = EPartitionType::PartitionTypeLogical;
             }
             PartitionSeniorManager::instance()->newPartition(devName, newfreeName, data);
@@ -129,7 +125,7 @@ void PartitionCustomManager::setFormatDisk(const SDeviceInfo &devName)
 
 bool PartitionCustomManager::isNewSystem(const SDeviceInfo &devName)
 {
-    if (CommonFunc::isUEFI()) {
+    if (findDev(devName).type == EDisklabelType::GPT) {
         return true;
     }
 
@@ -192,11 +188,20 @@ int PartitionCustomManager::getPrimaryPartitionCnt(const SDeviceInfo &devName)
     return reset;
 }
 
-qint64 PartitionCustomManager::getSystemMinSpace()
+bool PartitionCustomManager::hasBIOSBootPartition(const SDeviceInfo &devName) const
+{
+    for (const auto &partition : getSystemPartitionInfo().value(devName)) {
+        if (partition.usage == ESpaceUsage::USE && partition.isBiosBoot)
+            return true;
+    }
+    return false;
+}
+
+qint64 PartitionCustomManager::getSystemMinSpace(const SDeviceInfo &devName)
 {
     return qint64(CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG"))
-            + qint64(existSWAPPartition() ? 0 : CommonFunc::getSwapSize())
-            + qint64(PartitionSeniorManager::instance()->getBootPartition().id.isEmpty() ? CommonFunc::getSettingsInt("DI_BOOT_SIZE_CONFIG") : 0)
+            + qint64(CommonFunc::getSettingsInt("DI_BOOT_SIZE_CONFIG"))
+            + qint64((!CommonFunc::isUEFI() && findDev(devName).type == EDisklabelType::GPT && !hasBIOSBootPartition(devName)) ? 1 : 0)
             + qint64((CommonFunc::isUEFI() && getEFIPartition().id.isEmpty()) ? CommonFunc::getSettingsInt("DI_EFI_SIZE_CONFIG") : 0);
 }
 
@@ -223,7 +228,7 @@ SPartitionInfo PartitionCustomManager::getRootaPartitionInfo(qint64 size, const 
     info.usage = ESpaceUsage::USE;
     info.device = dev.device;
     info.deviceSize = dev.size;
-    info.filesystem = "ext4";
+    info.filesystem = "btrfs";
     info.mountPoint = "/";
     info.label = gRootLabel;
     info.isStartPoint = true;

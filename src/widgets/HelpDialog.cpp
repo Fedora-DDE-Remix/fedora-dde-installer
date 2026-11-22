@@ -120,10 +120,16 @@ void SeniorTipDialog::setContentText()
     QString rootSize = QString::number(CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG") * 1.0 / 1024) + "GiB";
     if (CommonFunc::isUEFI()) {
         addHelpText(::QObject::tr("/boot/efi Partition, Boot Partition"), QString(::QObject::tr("File System:%1\n").arg("vfat")) + QString(::QObject::tr("Size:At least %1\n").arg(efiSize)));
+    } else {
+        addHelpText(::QObject::tr("BIOS boot partition (GPT)"),
+                    ::QObject::tr("At least 1 MiB, with no filesystem or mount point. Not needed on an existing MBR disk."));
     }
     addHelpText(::QObject::tr("/boot Partition, Boot Partition"), QString(::QObject::tr("File System:%1\n").arg("ext4")) + QString(::QObject::tr("Size:At least %1\n").arg(bootSize)));
-    addHelpText(::QObject::tr("/ Partition, Root Directory"), QString(::QObject::tr("File System: %1\n").arg("ext4")) + QString(::QObject::tr("Size: At least %1\n").arg(rootSize)));
-    addHelpText(::QObject::tr("/swap Partition, SWAP Partition"), QString(::QObject::tr("File System: %1\n").arg("linux-swap")) + QString(::QObject::tr("Size: Based on the amount of physical memory\n")));
+    addHelpText(::QObject::tr("/ Partition, Root Directory"),
+                ::QObject::tr("Btrfs by default; ext4 and XFS are also supported.\nRoot and /home share Btrfs space unless /home is separate.\n")
+                + ::QObject::tr("Size: At least %1\n").arg(rootSize));
+    addHelpText(::QObject::tr("Swap (optional)"),
+                ::QObject::tr("zram provides swap by default. A linux-swap partition is optional and has no mount point."));
 
 }
 
@@ -154,9 +160,11 @@ OtherPartitionDialog::OtherPartitionDialog(QWidget *parent) : HelpDialog(400, pa
 
 void OtherPartitionDialog::setContentText()
 {
-    addHelpText(::QObject::tr("Other partitions include:"),
-                //::QObject::tr("/rootB: Root partition RootB, used to back up the root partition during system upgrades.\n") +
-                //::QObject::tr("/recovery: Recovery partition, used to store system initialization recovery backup.\n") +
-                ::QObject::tr("/boot/efi: System boot partition, stores boot files.\n") +
-                ::QObject::tr("/SWAP: System swap partition, ensure system performance when there is insufficient memory."));
+    QString description = ::QObject::tr("/boot: Separate ext4 boot partition.\n");
+    if (CommonFunc::isUEFI())
+        description += ::QObject::tr("/boot/efi: System boot partition, stores boot files.\n");
+    else
+        description += ::QObject::tr("BIOS boot: An unformatted 1 MiB area on GPT disks.\n");
+    description += ::QObject::tr("Swap uses zram by default. An on-disk swap partition is optional.");
+    addHelpText(::QObject::tr("Other partitions include:"), description);
 }

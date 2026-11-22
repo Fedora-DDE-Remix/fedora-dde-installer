@@ -475,6 +475,7 @@ QList<SDataInfo> ItemModel::toSDataInfo(QMap<SDeviceInfo, QList<SPartitionInfo>>
             partData.partitionType = partinfo.partitionType;
             partData.isMergeVG = partinfo.isMergeVG;
             partData.isNeedFormat = partinfo.isNeedFormat;
+            partData.isBiosBoot = partinfo.isBiosBoot;
             partData.isCanEncrypt = partinfo.isCanCrypt;
             partData.isEncrypt = !partinfo.cryptPassword.isEmpty();
             if (ESpaceUsage::FREE == partinfo.usage || EPartitionType::PartitionTypeExtension != partinfo.partitionType) {
@@ -541,6 +542,7 @@ SPartitionInfo ItemModel::dataToPartition(const SDataInfo &dataInfo)
     reset.path = dataInfo.path;
     reset.isMergeVG = dataInfo.isMergeVG;
     reset.isNeedFormat = dataInfo.isNeedFormat;
+    reset.isBiosBoot = dataInfo.isBiosBoot;
 
     return reset;
 }
@@ -664,7 +666,8 @@ QVariant ItemModel::data(const QModelIndex &index, int role) const
         return jsonObj;
     } else if (icol == 1) {
         if (!isFree) {
-            jsonObj.insert(ITEMFILESYSTEM, dataInfo.fileSystem);
+            jsonObj.insert(ITEMFILESYSTEM, dataInfo.isBiosBoot
+                           ? ::QObject::tr("BIOS boot (no filesystem)") : dataInfo.fileSystem);
         }
         return jsonObj;
     } else if (icol == 2) {

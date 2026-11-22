@@ -41,15 +41,17 @@ bool LibpartedManager::commit(PedDisk* lpDisk)
 
 void LibpartedManager::destroyDeviceAndDisk(PedDevice*& lpDevice, PedDisk*& lpDisk)
 {
+    // PedDisk retains its PedDevice pointer until it is destroyed.
+    if (lpDisk) {
+        ped_disk_destroy(lpDisk);
+        lpDisk = nullptr;
+    }
+
     if (lpDevice) {
         ped_device_destroy(lpDevice);
         lpDevice = nullptr;
     }
 
-    if (lpDisk) {
-        ped_disk_destroy(lpDisk);
-        lpDisk = nullptr;
-    }
 }
 
 bool LibpartedManager::getDeviceAndDisk(const QString& devicePath,
@@ -182,4 +184,33 @@ QString LibpartedManager::getPartitionPath(const SPartitionInfo &partInfo)
     destroyDeviceAndDisk(lpDevice, lpDisk);
 
     return path;
+}
+
+bool LibpartedManager::setBIOSBootFlag(const SPartitionInfo &partInfo, QString &error)
+{
+    // This reserved area must never be mounted or passed to mkfs.
+    if (!partInfo.isBiosBoot || !partInfo.filesystem.isEmpty()
+            || !partInfo.mountPoint.isEmpty() || partInfo.isNeedFormat
+            || partInfo.isCrypt || partInfo.size < 1) {
+        error = "Invalid BIOS boot partition";
+        return false;
+    }
+
+    PedDevice *device = nullptr;
+    PedDisk *disk = nullptr;
+    if (!getDeviceAndDisk(partInfo.device, device, disk)) {
+        error = "Cannot read the BIOS boot partition table";
+        return false;
+    }
+
+    PedPartition *partition = getPartition(disk, partInfo.path);
+    const bool valid = QString::fromLatin1(disk->type->name) == "gpt" && partition
+            && ped_partition_is_flag_available(partition, PED_PARTITION_BIOS_GRUB);
+    const bool ok = valid
+            && ped_partition_set_flag(partition, PED_PARTITION_BIOS_GRUB, 1)
+            && commit(disk);
+    if (!ok)
+        error = "Cannot set bios_grub on the GPT BIOS boot partition";
+    destroyDeviceAndDisk(device, disk);
+    return ok;
 }

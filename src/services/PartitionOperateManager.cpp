@@ -453,6 +453,8 @@ void PartitionOperateManager::setOperateInfo(const QString &op, const SPartition
 {
     QString partLabel = in.label.isEmpty() ? in.path : in.label;
     QString partFileSystem = in.filesystem;
+    if (in.isBiosBoot)
+        partFileSystem = ::QObject::tr("BIOS boot (no filesystem)");
     if (partFileSystem.isEmpty()) {
         if (in.partitionType == EPartitionType::PartitionTypeExtension) {
             partLabel = "";
@@ -601,6 +603,7 @@ QJsonObject PartitionOperateManager::getOperateJsonObject(const QString &oper, c
     json.insert("deviceSize", in.deviceSize);
     json.insert("path", in.path);
     json.insert("isneedformat", in.isNeedFormat);
+    json.insert("isBiosBoot", in.isBiosBoot);
     json.insert("isCrypt", in.isCrypt);
     json.insert("cryptPassword", in.cryptPassword);
     json.insert("isCryptHeader", in.isCryptHeader);
@@ -685,7 +688,9 @@ void PartitionOperateManager::setFormatDisk(const SDeviceInfo &dev)
     if (!dev.device.isEmpty()) {
         SDeviceInfo curDev = dev;
         curDev.isFormat = true;
-        curDev.type = CommonFunc::isUEFI() ? EDisklabelType::GPT : EDisklabelType::MsDos;
+        // Newly erased disks use GPT under both firmware modes. Existing MBR
+        // disks remain supported when the user keeps their partition table.
+        curDev.type = EDisklabelType::GPT;
         QList<SPartitionInfo> parts = m_currentDeviceInfo.value(curDev);
         m_currentDeviceInfo.remove(curDev);
         m_currentDeviceInfo[curDev] = parts;

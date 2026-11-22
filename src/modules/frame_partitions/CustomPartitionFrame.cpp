@@ -49,8 +49,8 @@ CustomPartitionFrame::CustomPartitionFrame(const QMap<SDeviceInfo, QList<SPartit
                 if (devs.value(dev).size()<=1) {
                     free = PartitionSeniorManager::instance()->getEmptyDiskPartition(dev);
                 }
-                qint64 systemMinSpace = PartitionCustomManager::instance()->getSystemMinSpace();
-                qint64 dataMinSpace = CommonFunc::getSettingsInt("DI_PERSISTENT_SIZE_CONFIG");
+                qint64 systemMinSpace = PartitionCustomManager::instance()->getSystemMinSpace(dev);
+                qint64 dataMinSpace = 0; // /home shares Btrfs space unless a separate partition is requested.
                 // 可自定义分区的最小空间要大于等于系统空间和数据空间最小值之和
                 if (free.size >= (systemMinSpace + dataMinSpace)) {
                     CreateNewSysDialog newPartitionDlg(free);

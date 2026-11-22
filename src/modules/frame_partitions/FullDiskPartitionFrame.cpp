@@ -103,7 +103,7 @@ void FullDiskPartitionFrame::updateTs()
     m_sizeEditDialog->updateTs();
     m_tipLabel->setText(m_tipLabel->text());
     m_otherPartitionDialog->updateTs();
-    m_modeTip_1->setText(tr("Creates a boot partition, swap, and a writable root filesystem using the remaining disk space. All data on the selected disk will be erased."));
+    m_modeTip_1->setText(tr("Creates boot partitions and a compressed Btrfs filesystem. Root and /home share the remaining space. Swap uses zram. All data on the selected disk will be erased."));
     m_modeTip_1->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     m_modeTip_1->adjustSize();
     m_modeTip_2->setText(::QObject::tr("Encrypt the whole disk to prevent data theft."));

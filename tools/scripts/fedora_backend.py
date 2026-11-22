@@ -23,6 +23,13 @@ import sys
 import tempfile
 import uuid
 
+# Hooks run with Python's isolated (-I) mode. Only permit imports from this
+# installed, root-owned script directory; never consult the caller's cwd or
+# PYTHONPATH. Keep one exception/state type when this file is the entry point.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+if __name__ == "__main__":
+    sys.modules["fedora_backend"] = sys.modules[__name__]
+
 
 APP = "fedora-dde-installer"
 TARGET = Path("/target")
@@ -49,6 +56,7 @@ def parse_mounts(value: str) -> list[dict[str, str]]:
     """Parse the existing partition helper's device=mount[options] protocol."""
     result = []
     seen = set()
+    devices = set()
     for entry in filter(None, value.split(";")):
         match = re.fullmatch(r"([^=]+)=([^\[]+)(?:\[([^\]]+)\])?", entry)
         require(match is not None, "The partition helper returned an invalid mount entry.")
@@ -58,8 +66,10 @@ def parse_mounts(value: str) -> list[dict[str, str]]:
         require(mountpoint in ALLOWED_MOUNTS, f"Unsupported target mount point: {mountpoint}")
         require(mountpoint == "swap" or mountpoint not in seen,
                 f"Duplicate target mount point: {mountpoint}")
-        require(options in (None, "compress=zstd"), "Unsupported filesystem mount options.")
+        require(device not in devices, "The partition helper returned the same partition more than once.")
+        require(options in (None, "compress=zstd", "compress=zstd:1"), "Unsupported filesystem mount options.")
         seen.add(mountpoint)
+        devices.add(device)
         result.append({"device": device, "mountpoint": mountpoint, "options": options or "defaults"})
     require("/" in seen, "The partition plan does not contain a root filesystem.")
     return sorted(result, key=lambda item: (item["mountpoint"] != "/", item["mountpoint"].count("/"), item["mountpoint"]))
@@ -82,6 +92,7 @@ def validate_plan(plan: object) -> list[str]:
                 "A partition plan device is invalid.")
         devices.add(device)
         if item.get("type") == "disk":
+            require(item.get("operate") in {"new", "edit"}, "Unsupported disk operation.")
             require(item.get("diskType") in {"gpt", "msdos", "dos"}, "Unsupported partition table type.")
         else:
             path = item.get("path", "")
@@ -91,6 +102,14 @@ def validate_plan(plan: object) -> list[str]:
                     "Partition labels must use at most 32 letters, digits, dots, underscores or hyphens.")
             require(item.get("filesystem", "") in ROOT_FILESYSTEMS | {"", "vfat", "fat32", "efi", "ext2", "ext3", "swap", "linux-swap"},
                     "The partition filesystem is unsupported.")
+            require(isinstance(item.get("isBiosBoot", False), bool), "Invalid BIOS boot partition flag.")
+            if item.get("isBiosBoot"):
+                require(not item.get("mountPoint") and not item.get("filesystem")
+                        and not item.get("isneedformat"),
+                        "A BIOS boot partition must be unformatted and have no mount point.")
+            if item.get("operate") == "new" and item.get("filesystem"):
+                require(item.get("isneedformat") is True,
+                        "A newly created filesystem partition must be explicitly formatted.")
         if item.get("type") != "partition" or item.get("operate") in {"delete", "normal"}:
             continue
         point = item.get("mountPoint", "")
@@ -101,7 +120,7 @@ def validate_plan(plan: object) -> list[str]:
             roots.append(item)
             require(item.get("filesystem") in ROOT_FILESYSTEMS,
                     "The root filesystem must be ext4, XFS or Btrfs.")
-            require(item.get("operate") == "new" or item.get("isneedformat") is True,
+            require(item.get("isneedformat") is True,
                     "The target root must be newly created or explicitly selected for formatting.")
     require(len(roots) == 1, "Select exactly one target root filesystem.")
     return sorted(devices)
@@ -252,13 +271,17 @@ class Backend:
         require(not self.target.is_symlink() and self.target.resolve() != Path("/"), "Unsafe installation target.")
         point = point or self.target
         result = self.run("findmnt", "--noheadings", "--raw", "--mountpoint", str(point),
-                          "--output", "SOURCE,MAJ:MIN,FSTYPE,UUID,OPTIONS")
+                          "--output", "SOURCE,MAJ:MIN,FSTYPE,UUID,OPTIONS,FSROOT")
         columns = result.stdout.strip().split()
         filesystems = ROOT_FILESYSTEMS if point == self.target else ROOT_FILESYSTEMS | {"ext2", "ext3", "vfat"}
-        require(len(columns) == 5 and columns[0].startswith("/dev/") and columns[2] in filesystems
-                and bool(re.fullmatch(r"[A-Fa-f0-9-]+", columns[3])) and "rw" in columns[4].split(","),
+        require(len(columns) == 6 and columns[0].startswith("/dev/") and columns[2] in filesystems
+                and bool(re.fullmatch(r"[A-Fa-f0-9-]+", columns[3])) and "rw" in columns[4].split(",")
+                and columns[5].startswith("/"),
                 "The target must be a mounted writable disk filesystem with a UUID.")
-        return dict(zip(("source", "major_minor", "fstype", "uuid"), columns[:4]))
+        identity = dict(zip(("source", "major_minor", "fstype", "uuid"), columns[:4]))
+        identity["source"] = identity["source"].split("[", 1)[0]
+        identity["fsroot"] = columns[5]  # Distinguish Btrfs subvolumes sharing a device and UUID.
+        return identity
 
     def verify_target(self, marker: bool = True) -> None:
         require(self.mount_identity() == self.state.get("mount_identity"),
@@ -277,63 +300,30 @@ class Backend:
         self.config.set("DI_INSTALLER_STATUS", str(value))
 
     def source_check(self, source: Path) -> None:
-        require(source.is_absolute() and source.is_dir() and not source.is_symlink(), "Invalid Fedora source root.")
-        require(not source.resolve().is_relative_to(self.target.resolve()), "The source is inside the target.")
-        os_release = source / "etc/os-release"
-        require(os_release.is_file(), "The source has no operating system metadata.")
-        values = {}
-        for line in os_release.read_text().splitlines():
-            if "=" in line:
-                key, value = line.split("=", 1)
-                values[key] = value.strip('"\'')
-        require(values.get("ID") == "fedora", "The source must be a Fedora Live root filesystem.")
-        require(not (source / "run/ostree-booted").exists()
-                and not (source / "ostree/repo").is_dir(), "Image-based deployment roots are not supported.")
-        require(any((source / "usr/lib/modules").glob("*/vmlinuz"))
-                or any((source / "boot").glob("vmlinuz-*")), "The source does not contain an installed kernel.")
-        if source == Path("/"):
-            commandline = Path("/proc/cmdline").read_text().split()
-            require(any(item == "rd.live.image" or item.startswith("root=live:") for item in commandline),
-                    "Copying / is only allowed while booted from a Fedora Live image.")
-            mounted = self.run("findmnt", "--noheadings", "--raw", "--mountpoint", "/",
-                               "--output", "SOURCE,FSTYPE").stdout.strip().split()
-            require(len(mounted) == 2 and (mounted[1] in {"overlay", "squashfs"}
-                    or mounted[0].startswith(("/dev/mapper/live-", "/dev/loop"))),
-                    "The running root does not have a Fedora Live filesystem layout.")
-        else:
-            self.run("findmnt", "--noheadings", "--mountpoint", str(source))
-        for path in ("usr/bin/rpm", "usr/bin/dnf", "usr/bin/systemctl", "usr/bin/dracut",
-                     "usr/sbin/chpasswd", "usr/sbin/useradd", "usr/bin/grub2-mkconfig", "usr/bin/grub2-editenv"):
-            # Fedora uses /usr/sbin for some utilities on older images.
-            require((source / path).exists() or (source / "usr/sbin" / Path(path).name).exists(),
-                    f"The Live image is missing {Path(path).name}; include it when composing the ISO.")
+        from fedora_payload import validate_root
+        validate_root(self, source)
 
     def preflight(self) -> None:
+        from fedora_boot import firmware_suffix
+        from fedora_payload import prepare_source, release_source, rooted_path
+        from fedora_storage import validate_layout
         if self.state_file.exists():
             self.load()
-            require(self.state.get("phase") in {"preflight", "finalized"}, "An installation is already active in this Live session.")
-        source = Path(self.config.get("DI_SOURCE_ROOT", "/"))
-        self.source_check(source)
+            require(self.state.get("phase") in {"preflight", "source-validation-failed", "finalized"},
+                    "An installation is already active in this Live session.")
+            if self.state.get("phase") in {"preflight", "source-validation-failed"}:
+                release_source(self)
+        commandline = Path("/proc/cmdline").read_text().strip()
+        require("fips=1" not in commandline.split(),
+                "FIPS installation is not implemented; boot this Live installer without fips=1.")
         architecture = platform.machine()
         require(architecture in {"x86_64", "aarch64"}, "Supported targets are x86_64 and aarch64.")
         uefi = Path("/sys/firmware/efi").is_dir()
         require(uefi or architecture == "x86_64", "aarch64 requires booting the Live image in UEFI mode.")
-        for command in ("rsync", "findmnt", "lsblk", "blkid", "mount", "umount", "chroot", "setfiles", "parted",
-                        "systemctl", "rpm", "sync", "udevadm") + (("efibootmgr",) if uefi else ()):
+        for command in ("rsync", "findmnt", "lsblk", "blkid", "mount", "umount", "chroot", "parted", "btrfs",
+                        "systemctl", "rpm", "sort", "sync", "udevadm") + (("efibootmgr",) if uefi else ()):
             require(shutil.which(command) is not None, f"The Live image is missing the required utility {command}.")
         require(Path(PARTITION_TOOL).is_file(), "The Fedora partition helper is not installed.")
-        require((source / "usr/lib/systemd/system/ddm.service").is_file(), "The Live image must include DDM.")
-        require((source / "etc/selinux/targeted/contexts/files/file_contexts").is_file(),
-                "The Live image must include selinux-policy-targeted.")
-        require((source / "etc/pam.d/password-auth").exists() and (source / "etc/pam.d/postlogin").exists(),
-                "The Live image must include Fedora's authselect PAM configuration.")
-        if uefi:
-            suffix = "x64" if architecture == "x86_64" else "aa64"
-            self.efi_file(f"shim-{suffix}", f"shim{suffix}.efi", root=source)
-            self.efi_file(f"grub2-efi-{suffix}", f"grub{suffix}.efi", root=source)
-        else:
-            require((source / "usr/lib/grub/i386-pc").is_dir(),
-                    "BIOS installation requires grub2-pc and grub2-pc-modules in the Live image.")
         require(self.config.get("DI_PARTITION_TYPE", "0") in ALLOWED_MODES,
                 "Choose a normal full-disk, manual or free-space installation.")
         require(not self.config.get("DI_CRYPT_PASSWORD") and self.config.get("DI_IS_GHOST_MODE", "false") != "true",
@@ -343,36 +333,43 @@ class Backend:
         plan_path = Path(self.config.get("DI_PARTITION_CONFIG"))
         require(plan_path.is_file() and not plan_path.is_symlink(), "The confirmed partition plan is missing.")
         plan_bytes = plan_path.read_bytes()
-        devices = validate_plan(json.loads(plan_bytes))
-        requested_mounts = {item.get("mountPoint") for item in json.loads(plan_bytes)
-                            if item.get("type") == "partition" and item.get("operate") not in {"delete", "normal"}}
-        boot_parts = [item for item in json.loads(plan_bytes) if item.get("type") == "partition"
-                      and item.get("operate") not in {"delete", "normal"} and item.get("mountPoint") == "/boot"]
-        require(len(boot_parts) == 1 and boot_parts[0].get("filesystem") == "ext4",
-                "This release requires a separate ext4 /boot partition.")
-        require(boot_parts[0].get("operate") == "new" or boot_parts[0].get("isneedformat") is True,
-                "The /boot partition must be new or explicitly selected for formatting.")
-        require(not uefi or "/boot/efi" in requested_mounts,
-                "UEFI installation requires an EFI System Partition at /boot/efi.")
-        if uefi:
-            esp_parts = [item for item in json.loads(plan_bytes) if item.get("mountPoint") == "/boot/efi"
-                         and item.get("operate") not in {"delete", "normal"}]
-            require(len(esp_parts) == 1 and esp_parts[0].get("filesystem") in {"vfat", "fat32", "efi"},
-                    "The EFI System Partition must use FAT32.")
-        else:
-            require(len(devices) == 1, "This release supports BIOS installation to one disk at a time.")
-            disk_operations = [item for item in json.loads(plan_bytes) if item.get("type") == "disk"]
-            label = next((item.get("diskType", "") for item in disk_operations
-                          if item.get("device") == devices[0]), "")
-            if not label:
-                label = self.run("lsblk", "--nodeps", "--noheadings", "--output", "PTTYPE", devices[0]).stdout.strip()
-            require(label in {"dos", "msdos"}, "BIOS installation requires an MBR/MS-DOS disk in this release.")
+        plan = json.loads(plan_bytes)
+        devices = validate_plan(plan)
+        tables = validate_layout(self, plan, devices, uefi)
         for device in devices:
             require(stat.S_ISBLK(os.stat(device).st_mode), f"Not a block device: {device}")
             mounted = self.run("lsblk", "--noheadings", "--raw", "--output", "MOUNTPOINTS", device).stdout.strip()
             require(not mounted, f"{device} has mounted filesystems; unmount them before installing.")
-        self.state = {"boot_id": self.boot_id, "target": str(self.target), "source": str(source),
-                      "architecture": architecture, "uefi": uefi, "devices": devices,
+        source_state = prepare_source(self)
+        source = Path(source_state["source"])
+        try:
+            require(rooted_path(source, "usr/lib/systemd/system/ddm.service").is_file(), "The Live image must include DDM.")
+            require(rooted_path(source, "etc/selinux/targeted/contexts/files/file_contexts").is_file(),
+                    "The Live image must include selinux-policy-targeted.")
+            suffix = firmware_suffix(architecture) if uefi else ""
+            if uefi:
+                self.efi_file(f"shim-{suffix}", f"shim{suffix}.efi", root=source)
+                self.efi_file(f"grub2-efi-{suffix}", f"grub{suffix}.efi", root=source)
+                require(any(rooted_path(source, prefix + "gen_grub_cfgstub").is_file()
+                            for prefix in ("usr/bin/", "usr/sbin/")),
+                        "The Live base must include Fedora's gen_grub_cfgstub utility.")
+            else:
+                require(rooted_path(source, "usr/lib/grub/i386-pc").is_dir()
+                        and any(rooted_path(source, prefix + "grub2-install").is_file()
+                                for prefix in ("usr/bin/", "usr/sbin/")),
+                        "BIOS installation requires grub2-pc and grub2-pc-modules in the Live image.")
+        except Exception:
+            if source_state.get("source_mounted_this_call"):
+                result = self.run("umount", str(source), check=False)
+                if result.returncode:
+                    # Keep ownership recorded if cleanup is temporarily busy;
+                    # this state can only retry preflight, never partition.
+                    self.state = {"boot_id": self.boot_id, "target": str(self.target), **source_state}
+                    self.save("source-validation-failed")
+            raise
+        self.state = {"boot_id": self.boot_id, "target": str(self.target), **source_state,
+                      "architecture": architecture, "uefi": uefi, "efi_suffix": suffix, "devices": devices,
+                      "partition_tables": tables, "live_kernel_cmdline": commandline,
                       "plan_path": str(plan_path), "plan_sha256": hashlib.sha256(plan_bytes).hexdigest(),
                       "installation_id": str(uuid.uuid4()), "owned_mounts": [], "mounts": []}
         self.save("preflight")
@@ -380,22 +377,25 @@ class Backend:
         self.progress(1)
 
     def partition(self) -> None:
+        from fedora_payload import verify_source
+        from fedora_storage import mount_filesystems, verify_bios_area
         self.load("preflight")
         plan_bytes = Path(self.state["plan_path"]).read_bytes()
         require(hashlib.sha256(plan_bytes).hexdigest() == self.state["plan_sha256"],
                 "The partition plan changed after validation. Review it again.")
+        verify_source(self)  # Check again before the first destructive operation.
         # Mark before the destructive helper: retries must never silently format again.
         self.save("partitioning")
         self.config.set("DI_MOUNTS_POINTS", "")
         self.run(PARTITION_TOOL, "-m", self.config.get("DI_PARTITION_TYPE", "0"),
                  "-c", self.state["plan_path"], capture=False)
         self.run("udevadm", "settle")
+        verify_bios_area(self)
         mappings = parse_mounts(self.config.get("DI_MOUNTS_POINTS"))
         require(any(item["mountpoint"] == "/boot" for item in mappings),
                 "The partition helper did not return the required separate /boot partition.")
         require(not self.state["uefi"] or any(item["mountpoint"] == "/boot/efi" for item in mappings),
                 "UEFI installation requires an EFI System Partition mounted at /boot/efi.")
-        self.state["mounts"] = mappings
         for mapping in mappings:
             disk = self.run("lsblk", "-nro", "PKNAME", "--paths", mapping["device"]).stdout.strip()
             require(disk in self.state["devices"], "The partition helper returned a device outside the confirmed disks.")
@@ -405,15 +405,7 @@ class Backend:
                                if line.startswith("ID_PART_ENTRY_NUMBER=")), "")
                 require(number.isdigit(), "Cannot identify the EFI partition number.")
                 self.run("parted", "--script", disk, "set", number, "esp", "on")
-        self.target.mkdir(mode=0o755, exist_ok=True)
-        for mapping in mappings:
-            if mapping["mountpoint"] == "swap":
-                continue  # Do not activate or disable swap in the Live host.
-            point = self.target / mapping["mountpoint"].lstrip("/")
-            point.mkdir(parents=True, exist_ok=True)
-            self.run("mount", "--options", mapping["options"], mapping["device"], str(point))
-            self.state["owned_mounts"].append(str(point))
-            self.save()
+        mount_filesystems(self, mappings)
         self.state["mount_identity"] = self.mount_identity()
         self.state["mount_identities"] = {point: self.mount_identity(Path(point))
                                           for point in self.state["owned_mounts"]}
@@ -421,34 +413,15 @@ class Backend:
         self.progress(10)
 
     def copy(self) -> None:
-        self.load("partitioned", "copying")
-        self.verify_target(marker=False)
-        source = Path(self.state["source"])
-        self.source_check(source)
-        self.save("copying")
-        exclusions = ["/dev/***", "/proc/***", "/sys/***", "/run/***", "/tmp/***", "/mnt/***", "/media/***",
-                      "/target/***", "/lost+found", "/etc/machine-id", "/var/lib/dbus/machine-id",
-                      "/var/lib/systemd/random-seed", "/etc/ssh/ssh_host_*", "/var/log/***", "/var/tmp/***",
-                      "/var/cache/***", "/root/***",
-                      "/etc/fedora-dde-installer/***", "/home/*/.cache/***"]
-        live_user = self.config.get("LIVE_USERNAME", "liveuser")
-        require(bool(re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", live_user)), "Invalid Live username.")
-        exclusions.append(f"/home/{live_user}/***")
-        # rsync preserves owners, capabilities, ACLs, hardlinks and xattrs.  Runtime
-        # mounts and machine identity are excluded; no --delete can erase /home.
-        command = ["rsync", "-aHAX", "--numeric-ids", "--one-file-system", "--info=progress2"]
-        command += [f"--exclude={item}" for item in exclusions]
-        command += [str(source).rstrip("/") + "/", str(self.target) + "/"]
-        self.runner.run(command, capture=False)
-        for directory, mode in (("dev", 0o755), ("proc", 0o755), ("sys", 0o755), ("run", 0o755),
-                                ("tmp", 0o1777), ("var/tmp", 0o1777), ("var/log", 0o755), ("var/cache", 0o755),
-                                ("root", 0o700)):
-            path = self.path(directory)
-            require(not path.is_symlink(), f"The payload contains an unsafe {directory} symlink.")
-            path.mkdir(parents=True, exist_ok=True)
-            path.chmod(mode)
-        self.write("etc/fedora-dde-installer-target", self.state["installation_id"] + "\n", 0o600)
-        self.save("copied")
+        from fedora_payload import copy_payload, release_source
+        self.load("partitioned", "copying", "copied")
+        self.verify_target(marker=self.state["phase"] == "copied")
+        if self.state["phase"] != "copied":
+            self.save("copying")
+            copy_payload(self)
+            self.write("etc/fedora-dde-installer-target", self.state["installation_id"] + "\n", 0o600)
+            self.save("copied")
+        release_source(self)
         self.progress(60)
 
     def bind_runtime(self) -> None:
@@ -487,211 +460,96 @@ class Backend:
         self.save()
 
     def clean_live_settings(self) -> None:
+        from fedora_system import clean_live_autologin
+
         live_user = self.config.get("LIVE_USERNAME", "liveuser")
         require(bool(re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", live_user)), "Invalid Live username.")
         self.state["live_user"] = live_user
         # The image's live-only service must never take over the installed login.
         for unit in ("livesys.service", "livesys-late.service", "fedora-dde-installer.service"):
             self.run("systemctl", "--root", str(self.target), "disable", unit, check=False)
-        for pattern in ("etc/sudoers.d/*", "etc/systemd/system/getty@*.service.d/*.conf",
-                        "etc/systemd/system/serial-getty@*.service.d/*.conf", "etc/sddm.conf.d/*",
-                        "etc/lightdm/lightdm.conf.d/*", "etc/dconf/db/local.d/*"):
+        for pattern in ("etc/sddm.conf", "etc/sddm.conf.d/*.conf", "etc/gdm/custom.conf",
+                        "etc/lightdm/lightdm.conf", "etc/lightdm/lightdm.conf.d/*.conf",
+                        "etc/lxdm/lxdm.conf", "etc/dconf/db/local.d/*"):
             for path in self.target.glob(pattern):
                 if path.is_file() and not path.is_symlink():
+                    path = self.path(str(path.relative_to(self.target)))
                     contents = path.read_text(errors="replace")
-                    if live_user in contents and ("autologin" in contents.lower() or "NOPASSWD" in contents or "liveuser" in contents):
-                        path.unlink()
+                    cleaned = clean_live_autologin(contents, live_user)
+                    if cleaned != contents:
+                        self.atomic(path, cleaned, stat.S_IMODE(path.stat().st_mode))
+        for pattern in ("etc/systemd/system/getty@*.service.d/*.conf",
+                        "etc/systemd/system/serial-getty@*.service.d/*.conf"):
+            for path in self.target.glob(pattern):
+                if path.is_file() and not path.is_symlink():
+                    path = self.path(str(path.relative_to(self.target)))
+                    contents = path.read_text()
+                    if re.search(rf"(?m)^\s*ExecStart\s*=.*(?:--autologin|-a)\s+{re.escape(live_user)}(?:\s|$)", contents):
+                        # Drop both the Live ExecStart and its reset; preserve
+                        # unrelated serial console and unit settings.
+                        cleaned = "".join(line for line in contents.splitlines(keepends=True)
+                                          if not re.match(r"\s*ExecStart\s*=", line))
+                        self.atomic(path, cleaned, stat.S_IMODE(path.stat().st_mode))
         # Live images may grant their live user or the whole wheel group
         # passwordless sudo. The new wheel user must not inherit either rule.
         sudoers_paths = [self.path("etc/sudoers"), *self.target.glob("etc/sudoers.d/*")]
         for sudoers in sudoers_paths:
             if sudoers.is_file() and not sudoers.is_symlink():
+                sudoers = self.path(str(sudoers.relative_to(self.target)))
                 contents = sudoers.read_text()
                 cleaned = "".join(line for line in contents.splitlines(keepends=True)
                                   if not re.match(rf"\s*(?:{re.escape(live_user)}|%wheel)\s+.*NOPASSWD", line))
                 if cleaned != contents:
                     self.atomic(sudoers, cleaned, 0o440)
-        # DConfig defaults are also reset, so a live-image default cannot retain
-        # a passwordless account on the installed system.  Runtime caches were
-        # excluded from the payload copy.
-        schema = self.path("usr/share/dsg/configs/org.deepin.dde.ddm/org.deepin.dde.ddm.json")
-        if schema.is_file():
-            data = json.loads(schema.read_text())
-            for key in ("autologinUser", "autologinSession", "lastUser", "lastSession"):
-                if key in data.get("contents", {}):
-                    data["contents"][key]["value"] = ""
-            self.atomic(schema, json.dumps(data, indent=2) + "\n")
-        for parent in ("etc/dsg/configs/overrides", "usr/share/dsg/configs/overrides"):
-            for path in self.target.glob(parent + "/**/*.json"):
-                if path.is_file() and not path.is_symlink():
-                    text = path.read_text(errors="replace")
-                    if "autologinUser" in text or "autologinSession" in text:
-                        try:
-                            data = json.loads(text)
-                        except ValueError:
-                            continue
-                        for key in ("autologinUser", "autologinSession"):
-                            setting = data.get("contents", {}).get(key)
-                            if isinstance(setting, dict):
-                                setting["value"] = ""
-                        self.atomic(path, json.dumps(data, indent=2) + "\n")
+        # The DDM RPM owns its /usr/share schema/defaults. Only remove a Live
+        # account's /etc override; runtime DConfig caches are excluded on copy.
+        for path in self.target.glob("etc/dsg/configs/overrides/**/*.json"):
+            if path.is_file() and not path.is_symlink():
+                path = self.path(str(path.relative_to(self.target)))
+                try:
+                    data = json.loads(path.read_text())
+                except ValueError:
+                    continue
+                if not isinstance(data, dict):
+                    continue
+                settings = data.get("contents", {})
+                if not isinstance(settings, dict):
+                    continue
+                changed = False
+                for name, session in (("autologinUser", "autologinSession"), ("lastUser", "lastSession")):
+                    setting = settings.get(name)
+                    if isinstance(setting, dict) and setting.get("value") == live_user:
+                        setting["value"] = ""
+                        if isinstance(settings.get(session), dict):
+                            settings[session]["value"] = ""
+                        changed = True
+                if changed:
+                    self.atomic(path, json.dumps(data, indent=2) + "\n", stat.S_IMODE(path.stat().st_mode))
+        for relative in ("etc/machine-info", ".liveimg-configured"):
+            path = self.path(relative)
+            if path.is_file() or path.is_symlink():
+                path.unlink()
         self.save()
 
     def configure_fedora_pam(self) -> None:
-        # DDM's upstream generic files use Arch/Debian include names. Fedora's
-        # authselect owns password-auth/postlogin; preserve that generated stack
-        # and the SELinux/loginuid ordering used by Fedora display managers.
-        self.write("etc/pam.d/ddm", """#%PAM-1.0
-auth       substack     password-auth
-auth       include      postlogin
-account    required     pam_nologin.so
-account    include      password-auth
-password   include      password-auth
-session    required     pam_selinux.so close
-session    required     pam_loginuid.so
-session    required     pam_selinux.so open
-session    required     pam_namespace.so
-session    optional     pam_keyinit.so force revoke
-session    include      password-auth
-session    include      postlogin
-""")
-        # Installed systems deliberately have no passwordless DDM login. A
-        # separate Live image may ship its own live-only autologin PAM policy.
-        self.write("etc/pam.d/ddm-autologin", """#%PAM-1.0
-auth       requisite    pam_deny.so
-account    include      password-auth
-password   required     pam_deny.so
-session    include      password-auth
-session    include      postlogin
-""")
-        self.write("etc/selinux/config", "SELINUX=enforcing\nSELINUXTYPE=targeted\n")
+        from fedora_system import verify_fedora_pam
+
+        # Fedora's DDM RPM supplies its own PAM configuration. Keep that file,
+        # authselect's profile and the payload's SELinux policy intact so future
+        # RPM upgrades manage them normally, including configurable autologin.
+        verify_fedora_pam(self.target)
 
     def install_kernels(self) -> None:
-        root = next(item for item in self.state["mounts"] if item["mountpoint"] == "/")
-        options = f"root=UUID={root['uuid']} ro rhgb quiet"
-        self.write("etc/kernel/cmdline", options + "\n")
-        self.write("etc/default/grub", 'GRUB_TIMEOUT=5\nGRUB_DISTRIBUTOR="Fedora DDE Remix"\nGRUB_DEFAULT=saved\n'
-                   'GRUB_DISABLE_SUBMENU=true\nGRUB_TERMINAL_OUTPUT=console\n'
-                   'GRUB_ENABLE_BLSCFG=true\nGRUB_CMDLINE_LINUX="rhgb quiet"\n')
-        self.write("etc/dracut.conf.d/90-fedora-dde-installer.conf",
-                   'hostonly="no"\nomit_dracutmodules+=" dmsquash-live livenet "\n')
-        machine_id = uuid.uuid4().hex
-        self.write("etc/machine-id", machine_id + "\n", 0o444)
-        self.write("etc/kernel/entry-token", machine_id + "\n")
-        dbus_id = self.path("var/lib/dbus/machine-id")
-        dbus_id.parent.mkdir(parents=True, exist_ok=True)
-        if dbus_id.exists() or dbus_id.is_symlink():
-            dbus_id.unlink()
-        dbus_id.symlink_to("/etc/machine-id")
-        entries = self.path("boot/loader/entries")
-        entries.mkdir(parents=True, exist_ok=True)
-        for path in entries.glob("*.conf"):
-            path.unlink()  # All copied entries refer to the Live source, never this root.
-        versions = sorted(path.name for path in self.path("usr/lib/modules").iterdir() if path.is_dir())
-        installed = []
-        for version in versions:
-            require(bool(re.fullmatch(r"[A-Za-z0-9._+-]+", version)), "Invalid installed kernel version.")
-            source = self.path(f"usr/lib/modules/{version}/vmlinuz")
-            destination = self.path(f"boot/vmlinuz-{version}")
-            if source.is_file():
-                require(source.resolve().is_relative_to(self.target.resolve()), "The kernel source escapes the target.")
-                if destination.is_symlink():
-                    destination.unlink()
-                shutil.copy2(source, destination)
-            require(destination.is_file(), f"Kernel image {version} is missing from the payload.")
-            self.chroot("dracut", "--force", "--no-hostonly", "--omit", "dmsquash-live livenet",
-                        f"/boot/initramfs-{version}.img", version,
-                        capture=False)
-            require(self.path(f"boot/initramfs-{version}.img").is_file(), "dracut did not create the target initramfs.")
-            self.write(f"boot/loader/entries/{machine_id}-{version}.conf",
-                       f"title Fedora DDE Remix ({version})\nversion {version}\n"
-                       f"linux /vmlinuz-{version}\ninitrd /initramfs-{version}.img\noptions {options}\n"
-                       "grub_users $grub_users\ngrub_arg --unrestricted\ngrub_class fedora\n")
-            installed.append(version)
-        require(bool(installed), "No installed kernel was found.")
-        self.state["kernels"] = installed
-        self.state["kernel_options"] = options
-        self.save()
+        from fedora_boot import install_kernels
+        install_kernels(self)
 
     def efi_file(self, package: str, name: str, root: Path | None = None) -> Path:
-        root = root or self.target
-        paths = self.run("rpm", "--root", str(root), "-ql", package).stdout.splitlines()
-        matches = [root / path.lstrip("/") for path in paths
-                   if path.endswith("/" + name) and (root / path.lstrip("/")).is_file()
-                   and (root / path.lstrip("/")).resolve().is_relative_to(root.resolve())]
-        require(bool(matches), f"The Live image must include {package} with {name}.")
-        # Fedora 44+ keeps the signed payload under /usr/lib/efi; older images
-        # carry it directly on /boot/efi. Prefer the package-owned source copy.
-        return sorted(matches, key=lambda path: ("/usr/lib/efi/" not in str(path), str(path)))[0]
+        from fedora_boot import efi_file
+        return efi_file(self, package, name, root)
 
     def install_bootloader(self) -> None:
-        if self.state["uefi"]:
-            suffix = "x64" if self.state["architecture"] == "x86_64" else "aa64"
-            shim = self.efi_file(f"shim-{suffix}", f"shim{suffix}.efi")
-            grub = self.efi_file(f"grub2-efi-{suffix}", f"grub{suffix}.efi")
-            vendor = self.path("boot/efi/EFI/fedora")
-            fallback = self.path("boot/efi/EFI/BOOT")
-            vendor.mkdir(parents=True, exist_ok=True)
-            fallback.mkdir(parents=True, exist_ok=True)
-            fallback_loader = fallback / f"BOOT{suffix.upper()}.EFI"
-            install_fallback = not fallback_loader.exists()
-            copies = [(shim, vendor / f"shim{suffix}.efi"), (grub, vendor / f"grub{suffix}.efi")]
-            if install_fallback:
-                copies += [(shim, fallback_loader), (grub, fallback / f"grub{suffix}.efi")]
-            for source, destination in copies:
-                if source.resolve() != destination.resolve():
-                    if destination.is_symlink():
-                        destination.unlink()
-                    shutil.copyfile(source, destination)
-            try:
-                manager = self.efi_file(f"shim-{suffix}", f"mm{suffix}.efi")
-                for directory in ((vendor, fallback) if install_fallback else (vendor,)):
-                    if manager.resolve() != (directory / manager.name).resolve():
-                        shutil.copyfile(manager, directory / manager.name)
-            except InstallError:
-                pass  # MokManager is not required to boot the Fedora-signed chain.
-            boot = next((item for item in self.state["mounts"] if item["mountpoint"] == "/boot"),
-                        next(item for item in self.state["mounts"] if item["mountpoint"] == "/"))
-            prefix = "/grub2" if boot["mountpoint"] == "/boot" else "/boot/grub2"
-            stub = f"search --no-floppy --fs-uuid --set=dev {boot['uuid']}\nset prefix=($dev){prefix}\nexport prefix\nconfigfile $prefix/grub.cfg\n"
-            self.write("boot/efi/EFI/fedora/grub.cfg", stub)
-            if install_fallback:
-                self.write("boot/efi/EFI/BOOT/grub.cfg", stub)
-                self.state["fallback_efi_sha256"] = hashlib.sha256(shim.read_bytes()).hexdigest()
-                self.save()
-            fallback_owned = (self.state.get("fallback_efi_sha256") == hashlib.sha256(fallback_loader.read_bytes()).hexdigest()
-                              and (fallback / "grub.cfg").is_file()
-                              and (fallback / "grub.cfg").read_text() == stub)
-            esp = next(item for item in self.state["mounts"] if item["mountpoint"] == "/boot/efi")
-            disk = self.run("lsblk", "-nro", "PKNAME", "--paths", esp["device"]).stdout.strip()
-            properties = self.run("udevadm", "info", "--query=property", "--name", esp["device"]).stdout
-            number = next((line.split("=", 1)[1] for line in properties.splitlines()
-                           if line.startswith("ID_PART_ENTRY_NUMBER=")), "")
-            require(bool(DEVICE_RE.fullmatch(disk)) and number.isdigit(), "Cannot identify the EFI partition.")
-            if not self.state.get("firmware_entry_created"):
-                result = self.run("efibootmgr", "--create", "--disk", disk, "--part", number,
-                                  "--label", "Fedora DDE Remix", "--loader", f"\\EFI\\fedora\\shim{suffix}.efi", check=False)
-                if result.returncode:
-                    require(fallback_owned, "Firmware entry creation failed and another system owns the UEFI fallback path.")
-                    print("Firmware entry could not be written; the standard UEFI fallback loader is installed.", flush=True)
-                    self.state["firmware_fallback"] = True
-                else:
-                    self.state["firmware_entry_created"] = True
-                self.save()
-        else:
-            boot_disk = self.config.get("DI_BOOT_DISK")
-            if not boot_disk:
-                require(len(self.state["devices"]) == 1, "Select DI_BOOT_DISK explicitly for a multi-disk BIOS installation.")
-                boot_disk = self.state["devices"][0]
-            require(boot_disk in self.state["devices"], "The BIOS boot disk is not part of the confirmed installation plan.")
-            self.chroot("grub2-install", "--target=i386-pc", "--recheck", boot_disk, capture=False)
-        self.path("boot/grub2").mkdir(parents=True, exist_ok=True)
-        self.chroot("grub2-editenv", "/boot/grub2/grubenv", "create")
-        self.chroot("grub2-editenv", "/boot/grub2/grubenv", "set", "blsdir=/loader/entries",
-                    "kernelopts=" + self.state.get("kernel_options", ""))
-        self.chroot("grub2-mkconfig", "--output=/boot/grub2/grub.cfg", capture=False)
-        require(self.path("boot/grub2/grub.cfg").is_file(), "GRUB configuration was not created.")
-        self.save()
+        from fedora_boot import install_bootloader
+        install_bootloader(self)
 
     def system(self) -> None:
         self.load("copied", "system-configuring")
@@ -701,8 +559,6 @@ session    include      postlogin
         self.bind_runtime()
         self.clean_live_settings()
         self.configure_fedora_pam()
-        self.install_kernels()
-        self.install_bootloader()
         require(self.path("usr/lib/systemd/system/ddm.service").is_file(), "The Fedora Live image must include the DDM desktop.")
         for service in ("gdm.service", "sddm.service", "lightdm.service"):
             self.run("systemctl", "--root", str(self.target), "disable", service, check=False)
@@ -720,6 +576,8 @@ session    include      postlogin
         print("System files are installed. The target remains mounted for account configuration.", flush=True)
 
     def configure(self) -> None:
+        from fedora_system import console_font, console_keymap
+
         self.load("awaiting-user", "configuring-user", "user-configured", "finalized")
         if self.state["phase"] == "finalized":
             return
@@ -741,11 +599,40 @@ session    include      postlogin
         require(all(account[key].lower().replace("utf-8", "utf8") in available.splitlines()
                     for key in ("locale", "region_locale")),
                 "The Live image lacks the selected language pack. Include the matching glibc-langpack in the ISO.")
+        keymap = console_keymap(self.target, account["layout"], account["variant"])
+        font = console_font(self.target, account["locale"])
+        ntp = self.config.get("DI_IS_ENABLE_NTP", "true").lower()
+        require(ntp in {"true", "false"}, "Choose whether network time synchronization should be enabled.")
+        session = self.config.get("DI_DDE_SESSION", "treeland")
+        require(bool(re.fullmatch(r"[A-Za-z0-9_-]+", session))
+                and self.path(f"usr/share/wayland-sessions/{session}.desktop").is_file(),
+                "The configured DDE Wayland session is missing.")
+        home = self.path(f"home/{user}")
+        require(not home.is_symlink(), "The selected user's home directory must not be a symbolic link.")
         self.save("configuring-user")
         existing = self.chroot("getent", "passwd", user, check=False)
         require(existing.returncode != 0 or self.state.get("user") == user or user == self.state.get("live_user"),
                 "That account already exists in the image; choose another username.")
+        # Free the Live account's UID before useradd, so an otherwise ordinary
+        # image creates the first installed user at Fedora's UID_MIN. Do not use
+        # userdel --remove: a retained /home may contain unrelated existing data.
+        live_user = self.state.get("live_user", "liveuser")
+        if live_user != user or self.state.get("user") != user:
+            if self.chroot("getent", "passwd", live_user, check=False).returncode == 0:
+                self.chroot("userdel", live_user)
+            for relative in (f"var/lib/AccountsService/users/{live_user}",
+                             f"var/lib/AccountsService/deepin/users/{live_user}"):
+                path = self.path(relative)
+                if path.is_file() or path.is_symlink():
+                    path.unlink()
+            if live_user == user:
+                # Reusing the Live username still creates a regular account,
+                # without its temporary group memberships or Live GECOS text.
+                existing = self.chroot("getent", "passwd", user, check=False)
         self.state["user"] = user
+        self.state.setdefault("user_home_created", not home.exists())
+        self.state["keyboard"] = {"layout": account["layout"], "variant": account["variant"],
+                                  "keymap": keymap, "font": font}
         self.save()
         if existing.returncode:
             self.chroot("useradd", "--create-home", "--user-group", "--shell", "/bin/bash", "--groups", "wheel", user)
@@ -753,13 +640,17 @@ session    include      postlogin
             self.chroot("usermod", "--append", "--groups", "wheel", "--shell", "/bin/bash", user)
         self.chroot("install", "-d", "-m", "0700", "-o", user, "-g", user, f"/home/{user}")
         self.chroot("chpasswd", input_text=f"{user}:{account['password']}\n")
+        # As in Anaconda, an unset password-change date avoids a broken RTC
+        # turning a new account into a mandatory password reset at first login.
+        self.chroot("chage", "-d", "", user)
         self.chroot("passwd", "--lock", "root")
-        live_user = self.state.get("live_user", "liveuser")
-        if live_user != user and self.chroot("getent", "passwd", live_user, check=False).returncode == 0:
-            self.chroot("userdel", "--remove", live_user)
+        self.chroot("chage", "-d", "", "root")
         self.write("etc/hostname", account["hostname"] + "\n")
-        self.write("etc/hosts", "127.0.0.1 localhost localhost.localdomain\n::1 localhost localhost.localdomain\n"
-                   f"127.0.1.1 {account['hostname']}\n")
+        # Fedora's nss-myhostname resolves the configured hostname. Preserve
+        # packaged/custom aliases rather than replacing hosts with a new table.
+        if not self.path("etc/hosts").exists():
+            self.write("etc/hosts", "127.0.0.1 localhost localhost.localdomain localhost4 localhost4.localdomain4\n"
+                       "::1 localhost localhost.localdomain localhost6 localhost6.localdomain6\n")
         locale_text = f"LANG={account['locale']}\n" + "".join(
             f"{key}={account['region_locale']}\n"
             for key in ("LC_TIME", "LC_NUMERIC", "LC_MONETARY", "LC_MEASUREMENT", "LC_PAPER"))
@@ -768,17 +659,18 @@ session    include      postlogin
         if localtime.exists() or localtime.is_symlink():
             localtime.unlink()
         localtime.symlink_to("../usr/share/zoneinfo/" + account["timezone"])
-        self.write("etc/adjtime", "0.0 0 0.0\n0\nUTC\n")
-        self.write("etc/vconsole.conf", "KEYMAP=us\n")
+        adjtime = self.path("etc/adjtime")
+        clock_lines = adjtime.read_text().splitlines() if adjtime.is_file() and not adjtime.is_symlink() else []
+        clock_lines = clock_lines[:2] if len(clock_lines) >= 2 else ["0.0 0 0.0", "0"]
+        self.write("etc/adjtime", "\n".join(clock_lines + ["UTC"]) + "\n")
+        self.write("etc/vconsole.conf", f'KEYMAP="{keymap}"\nFONT="{font}"\n')
         self.write("etc/X11/xorg.conf.d/00-keyboard.conf", 'Section "InputClass"\n Identifier "system-keyboard"\n'
                    ' MatchIsKeyboard "on"\n' + f' Option "XkbLayout" "{account["layout"]}"\n'
-                   + f' Option "XkbVariant" "{account["variant"]}"\nEndSection\n')
+                   + f' Option "XkbVariant" "{account["variant"]}"\n'
+                   + (' Option "XkbOptions" "grp:alt_shift_toggle"\n' if "," in account["layout"] else "")
+                   + 'EndSection\n')
         self.write("etc/sudoers.d/90-fedora-dde-admin", "%wheel ALL=(ALL) ALL\n", 0o440)
         self.chroot("visudo", "--check")
-        session = self.config.get("DI_DDE_SESSION", "treeland")
-        require(bool(re.fullmatch(r"[A-Za-z0-9_-]+", session))
-                and self.path(f"usr/share/wayland-sessions/{session}.desktop").is_file(),
-                "The configured DDE Wayland session is missing.")
         settings = ("[User]\nSystemAccount=false\n" + f"Language={account['locale']}\n"
                     + f"XSession={session}\nSession={session}\nSessionType=wayland\n")
         self.write(f"var/lib/AccountsService/users/{user}", settings, 0o600)
@@ -786,8 +678,17 @@ session    include      postlogin
                    + f"Layout={account['layout']};{account['variant']}\n", 0o600)
         self.write(f"home/{user}/.config/locale.conf", locale_text, 0o600)
         self.chroot("chown", f"{user}:{user}", f"/home/{user}/.config", f"/home/{user}/.config/locale.conf")
-        if self.config.get("DI_IS_ENABLE_NTP", "true") == "true" and self.path("usr/lib/systemd/system/chronyd.service").is_file():
-            self.run("systemctl", "--root", str(self.target), "enable", "chronyd.service")
+        if self.path("usr/lib/systemd/system/chronyd.service").is_file():
+            self.run("systemctl", "--root", str(self.target), "enable" if ntp == "true" else "disable", "chronyd.service")
+        if self.path("usr/lib/systemd/system/initial-setup.service").is_file():
+            self.run("systemctl", "--root", str(self.target), "disable", "initial-setup.service")
+        reconfigure = self.path("etc/reconfigSys")
+        if reconfigure.is_file() or reconfigure.is_symlink():
+            reconfigure.unlink()
+        # The final initramfs must include the chosen console layout and locale.
+        # These steps are retryable and leave the Live session and mounts intact.
+        self.install_kernels()
+        self.install_bootloader()
         self.remove_installer_from_target()
         self.relabel()
         self.save("user-configured")
@@ -811,13 +712,31 @@ session    include      postlogin
                 path.unlink()
 
     def relabel(self) -> None:
-        contexts = self.path("etc/selinux/targeted/contexts/files/file_contexts")
+        from fedora_system import target_path
+
+        config = self.path("etc/selinux/config")
+        policy = re.search(r"(?m)^\s*SELINUXTYPE\s*=\s*([A-Za-z0-9_-]+)\s*(?:#.*)?$",
+                           config.read_text()) if config.is_file() and not config.is_symlink() else None
+        policy_type = policy[1] if policy else "targeted"
+        contexts = self.path(f"etc/selinux/{policy_type}/contexts/files/file_contexts")
         require(contexts.is_file(), "The Fedora payload must include selinux-policy-targeted.")
-        command = ["setfiles", "-F", "-r", str(self.target)]
-        for relative in ("dev", "proc", "sys", "run", "boot/efi"):
-            command += ["-e", str(self.path(relative))]
-        command += [str(contexts), str(self.target)]
-        self.runner.run(command, capture=False)
+        # Follow Anaconda's targeted restorecon pass without -F: keep custom
+        # SELinux users/ranges, never walk the Live /dev or /sys binds, and do not
+        # recursively relabel a retained /home. Payload labels came via rsync -X.
+        candidates = ("/boot", "/etc", "/root", "/usr/lib", "/usr/lib64",
+                      "/var/cache/yum", "/var/lib", "/var/log", "/var/opt", "/var/spool", "/var/srv")
+        paths = [path for path in candidates if target_path(self.target, path.lstrip("/")).exists()]
+        self.chroot("restorecon", "-ir", "-e", "/boot/efi", "-e", "/dev", "-e", "/proc",
+                    "-e", "/sys", "-e", "/run", *paths, capture=False)
+        user = self.state.get("user")
+        if user:
+            home = f"/home/{user}"
+            if self.state.get("user_home_created"):
+                self.chroot("restorecon", "-ir", home, capture=False)
+            else:
+                # Only the entries this installer creates in an existing home.
+                self.chroot("restorecon", "-i", home, home + "/.config",
+                            home + "/.config/locale.conf", capture=False)
 
     def finalize(self) -> None:
         self.load("user-configured", "finalized")
@@ -833,7 +752,9 @@ session    include      postlogin
             self.write("var/log/fedora-dde-installer/install-summary.json", json.dumps({
                 "installation_id": self.state["installation_id"], "architecture": self.state["architecture"],
                 "uefi": self.state["uefi"], "kernels": self.state.get("kernels", []),
-                "firmware_fallback": self.state.get("firmware_fallback", False), "status": "configured"}, indent=2) + "\n", 0o600)
+                "firmware_fallback": self.state.get("firmware_fallback", False),
+                "keyboard": self.state.get("keyboard", {}), "status": "configured"}, indent=2) + "\n", 0o600)
+            self.chroot("restorecon", "-ir", "/var/log/fedora-dde-installer", capture=False)
             # A retry may already have unmounted a separate /var. Do not write
             # through its former mount point into the filesystem underneath.
             self.state["summary_written"] = True

@@ -9,6 +9,8 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QDebug>
+#include <QSaveFile>
+#include <algorithm>
 
 #include "structs.h"
 #include "CommonFunc.h"
@@ -38,7 +40,7 @@ protected:
             if (!mountPoint.isEmpty()) {
                 QString strMount = QString("%1=%2").arg(in.partition.path, mountPoint);
                 if(in.partition.filesystem == "btrfs" && compress == 1) {
-                    strMount.append("[compress=zstd]");
+                    strMount.append("[compress=zstd:1]");
                 }
 
                 mp_list.append(strMount);
@@ -58,7 +60,7 @@ protected:
             if (!mountPoint.isEmpty()) {
                 QString strMount = QString("%1=%2").arg(in.lvm.path, mountPoint);
                 if(in.lvm.filesystem == "btrfs" && compress == 1) {
-                    strMount.append("[compress=zstd]");
+                    strMount.append("[compress=zstd:1]");
                 }
 
                 mp_list.append(strMount);
@@ -70,9 +72,9 @@ protected:
 
     // 更新存放加密头的分区信息
     bool updateCryptHeaderHidePartInfo(const QString &config, const QList<SPartitionOperate> &partInfos, QString &err) {
-        if (!CommonFunc::getSettingsBool("DI_USE_HIDE_CRYPT_HEADER")) {
-            return true;
-        }
+        // Paths are assigned by the partition helper for ordinary partitions
+        // too. Only the old VG/LV renaming is conditional on hidden headers.
+        const bool updateCryptNames = CommonFunc::getSettingsBool("DI_USE_HIDE_CRYPT_HEADER");
         QJsonDocument policyDoc = QJsonDocument();
         if (!CommonFunc::readJsonFile(config, policyDoc, err)) {
             return false;
@@ -83,7 +85,7 @@ protected:
         QList<QPair<QString, QString>> vgNewNameList;
         for (const QJsonValue& partitionOperate : partitionOperateList) {
             QJsonObject obj = partitionOperate.toObject();
-            if (!obj.value("type").toString().compare("VG")) {
+            if (updateCryptNames && !obj.value("type").toString().compare("VG")) {
                 if (obj.value("name").toString().contains("usec-vg-")) {
                     // 更新vgname
                     QString vgName = QString("usec-vg-%1").arg(obj.value("pv").toArray().first().toString());
@@ -107,7 +109,7 @@ protected:
                         }
                     }
                 }
-            } else if (!obj.value("type").toString().compare("LVM")) {
+            } else if (updateCryptNames && !obj.value("type").toString().compare("LVM")) {
                 // 更新lvm配置中的vg名称
                 QString vgName = obj.value("vg").toString();
                 QList<QPair<QString, QString>>::Iterator vgNameIter = std::find_if(vgNewNameList.begin(), vgNewNameList.end(), [=](const QPair<QString, QString> &pair) {
@@ -143,18 +145,12 @@ protected:
         // 写入分区的配置
         QJsonDocument policyDocOut;
         policyDocOut.setArray(partitionOperateListOut);
-        QString bakFileName = config + "_bak";
-        if (QFile::exists(bakFileName)) {
-            QFile::remove(bakFileName);
-        }
-        QFile::rename(config, config + "_bak");
-        QFile file(config);
-        if (!file.open(QIODevice::ReadWrite)) {
-            err = QString("%1 File open error. err:<%2>").arg(config, file.errorString());
+        QSaveFile file(config);
+        const QByteArray updated = policyDocOut.toJson();
+        if (!file.open(QIODevice::WriteOnly) || file.write(updated) != updated.size() || !file.commit()) {
+            err = QString("%1 Path update failed. err:<%2>").arg(config, file.errorString());
             return false;
         }
-        file.write(policyDocOut.toJson());
-        file.close();
 
         return true;
     }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(fedora-dde-installer VERSION 0.1.0 LANGUAGES C CXX)
+project(fedora-dde-installer VERSION 0.2.0 LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 include(CTest)

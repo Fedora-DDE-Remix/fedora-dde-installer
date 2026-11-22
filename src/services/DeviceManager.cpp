@@ -793,6 +793,13 @@ SPartitionInfo DeviceManager::newPartitionByJobj(const SDeviceInfo &deviceinfo, 
     partinfoitem.isStartPoint  = true;
     partinfoitem.deviceSize    = deviceinfo.size;
     partinfoitem.isEFIPartition = (partinfoitem.filesystem == "vfat" && partinfoitem.label == "EFI");// 文件系统是vfat 并且label是EFI的情况下，是efi分区
+    // lsblk -O includes PARTTYPE. Detect an existing BIOS boot partition by
+    // its GPT type, independently of filesystem labels or partition names.
+    partinfoitem.isBiosBoot = deviceinfo.type == EDisklabelType::GPT
+            && partitioninfoobj.value("parttype").toString().compare(
+                "21686148-6449-6e6f-744e-656564454649", Qt::CaseInsensitive) == 0;
+    if (partinfoitem.isBiosBoot && partinfoitem.label.isEmpty())
+        partinfoitem.label = "BIOS-BOOT";
     partinfoitem.isMergeVG      = false;
     partinfoitem.isCrypt        = partinfoitem.filesystem == "crypto_LUKS" ? true : false;
     partinfoitem.decryptStatus  = (partinfoitem.isCrypt && partitioninfoobj.value("children").toArray().size() > 0) ? true : false;

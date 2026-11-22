@@ -13,7 +13,7 @@ CreateNewSysDialog::CreateNewSysDialog(const SPartitionInfo &free, QWidget *pare
 {
     m_titleWidget = new TitleWidget(this);
     m_titleWidget->setTitleLabelProperty(::QObject::tr("Space Allocation"), "font-size:16px;font-weight:Medium;");
-    m_titleWidget->setTipsLabelVisible(false);
+    m_titleWidget->setTipsLabelProperty(::QObject::tr("Btrfs root and /home share system space. Set data space above zero only for a separate /home partition."), "font-size:14px;");
     QHBoxLayout *titleLayout = new QHBoxLayout;
     titleLayout->addStretch();
     titleLayout->addWidget(m_titleWidget);
@@ -104,7 +104,7 @@ CreateNewSysDialog::CreateNewSysDialog(const SPartitionInfo &free, QWidget *pare
     pInnerWidget->setLayout(pMainLayout);
 
     addContent(pInnerWidget);
-    setFixedSize(440, 320);
+    setFixedSize(440, 400);
 
     this->setOnButtonClickedClose(true);
 
@@ -118,14 +118,14 @@ void CreateNewSysDialog::setSystemSpaceRange(const qint64 &Minimum, const qint64
 {
     m_editSystemSlider->setMinimum(Minimum);
     m_editSystemSlider->setMaximum(Maximum);
-    m_editSystemSlider->setValue(Minimum);
+    m_editSystemSlider->setValue(Maximum);
 }
 
 void CreateNewSysDialog::setDataSpaceRange(const qint64 &Minimum, const qint64 &Maximum)
 {
     m_editDataSlider->setMinimum(Minimum);
     m_editDataSlider->setMaximum(Maximum);
-    m_editDataSlider->setValue(Maximum);
+    m_editDataSlider->setValue(Minimum);
 }
 
 void CreateNewSysDialog::initConnection()

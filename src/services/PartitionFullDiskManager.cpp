@@ -47,7 +47,7 @@ bool PartitionFullDiskManager::addSystemDisk(const SDeviceInfo &dev, QString &er
                 free = PartitionSeniorManager::instance()->getFreePartInfo(dev, 80);
             }
             for (SPartitionInfo in : config) {
-                in.isNeedFormat = true;
+                in.isNeedFormat = !in.isBiosBoot;
                 PartitionSeniorManager::instance()->newPartition(dev, free, in);
                 free = PartitionSeniorManager::instance()->find(free.id);
             }
@@ -231,8 +231,6 @@ QList<SPartitionInfo> PartitionFullDiskManager::getSystemPartitionConfig(const S
         return partInfos;
     }
 
-    // 分区的数量
-    int partNumber = 1;
     // 磁盘的总大小
     qint64 total = dev.byteSize - 2 * giDeviceUnitSize * giDeviceUnitSize;
 
@@ -240,7 +238,10 @@ QList<SPartitionInfo> PartitionFullDiskManager::getSystemPartitionConfig(const S
         SPartitionInfo efi = CommonFunc::getEFIPartitionInfo(dev);
         partInfos.append(efi);
         total -= efi.byteSize;
-        ++partNumber;
+    } else {
+        SPartitionInfo biosBoot = CommonFunc::getBIOSBootPartitionInfo(dev);
+        partInfos.append(biosBoot);
+        total -= biosBoot.byteSize;
     }
 
     QString currentPlatform = CommonFunc::getCurrentPlatform();
@@ -269,13 +270,8 @@ QList<SPartitionInfo> PartitionFullDiskManager::getSystemPartitionConfig(const S
                 continue;
             }
 
-            // 处理逻辑分区
-            int mbrMaxPartNum = dev.isCreateCryptHeader ? gMBRMaxPartitionSize - 1 : gMBRMaxPartitionSize;
-            if (partNumber < mbrMaxPartNum  || CommonFunc::isUEFI()) {
-                info.partitionType = EPartitionType::PartitionTypePrimary;
-            } else {
-                info.partitionType = EPartitionType::PartitionTypeLogical;
-            }
+            // Full-disk installation creates GPT in both firmware modes.
+            info.partitionType = EPartitionType::PartitionTypePrimary;
 
             if (total <= 0) {
                 err = QString("The %1 disk space is insufficient. Check the configuration file again full_disk_policy.json")
@@ -313,7 +309,6 @@ QList<SPartitionInfo> PartitionFullDiskManager::getSystemPartitionConfig(const S
             partInfos.append(info);
 
             total -= info.byteSize;
-            partNumber++;
         }
     }
 
@@ -436,11 +431,10 @@ qint64 PartitionFullDiskManager::getConfigPartitionSize(const qint64 devSize, co
 
 qint64 PartitionFullDiskManager::getOtherPartitionSize(qint64 totalSize)
 {
-    qint64 swapSize = getConfigPartitionSize(totalSize, gSWAPLabel);
     qint64 efiSize = getConfigPartitionSize(totalSize, gEFILabel);
     qint64 bootSize = getConfigPartitionSize(totalSize, gBootLabel);
-    qint64 otherSize = swapSize + bootSize;
-    return CommonFunc::isUEFI() ? otherSize + efiSize : otherSize;
+    // Swap is provided by zram; BIOS/GPT reserves a separate 1 MiB area.
+    return bootSize + (CommonFunc::isUEFI() ? efiSize : 1);
 }
 
 void PartitionFullDiskManager::getDeviceCryptPartitions(const SDeviceInfo &devInfo, QList<SPartitionInfo> &partEncryptList)

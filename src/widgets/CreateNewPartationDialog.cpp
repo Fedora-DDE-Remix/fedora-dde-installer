@@ -91,9 +91,13 @@ CreateNewPartitionDialog::CreateNewPartitionDialog(const SDeviceInfo &dev, const
     m_fileSystemCmb->setFixedSize(kContentLength, 36);
     m_fileSystemCmb->addItems(getFileSystemList());
     connect(m_fileSystemCmb, &DComboBox::currentTextChanged, this, [=](const QString &text){
-        m_newPartitionInfo.filesystem = text;
+        const bool biosBoot = text == ::QObject::tr("BIOS boot (no filesystem)");
+        m_newPartitionInfo.isBiosBoot = biosBoot;
+        m_newPartitionInfo.filesystem = biosBoot ? QString() : text;
+        m_newPartitionInfo.isNeedFormat = !biosBoot;
+        m_formatPartition->setChecked(!biosBoot);
 
-        if (text == "linux-swap" || text == "lvm2 pv") {
+        if (biosBoot || text == "linux-swap" || text == "lvm2 pv") {
             m_mountPointCmb->setEnabled(false);
             m_mountPointCmb->setCurrentText(CommonFunc::getPartitionMountText(""));
             this->limitEditorSizeByMountPoint();
@@ -102,6 +106,7 @@ CreateNewPartitionDialog::CreateNewPartitionDialog(const SDeviceInfo &dev, const
         } else {
             m_mountPointCmb->setEnabled(true);
         }
+        updateErrTips(biosBoot ? ::QObject::tr("Reserved for GRUB on a BIOS/GPT disk; this partition is not formatted or mounted.") : formattedTips);
     });
 
     QHBoxLayout *pFileSystemLayout = new QHBoxLayout;
@@ -183,7 +188,9 @@ CreateNewPartitionDialog::CreateNewPartitionDialog(const SDeviceInfo &dev, const
     });
     connect(m_okBtn, &QAbstractButton::clicked, this, [=]{
         QString err = QString();
-        m_newPartitionInfo.filesystem = m_fileSystemCmb->currentText();
+        m_newPartitionInfo.isBiosBoot = m_fileSystemCmb->currentText() == ::QObject::tr("BIOS boot (no filesystem)");
+        m_newPartitionInfo.filesystem = m_newPartitionInfo.isBiosBoot ? QString() : m_fileSystemCmb->currentText();
+        m_newPartitionInfo.isNeedFormat = m_formatPartition->isChecked();
         m_newPartitionInfo.mountPoint = CommonFunc::getPartitionMountPoint(m_mountPointCmb->currentText());
         if (!PartitionSeniorManager::instance()->checkDialogNextEnable(m_newPartitionInfo, err)) {
             updateErrTips(err);
@@ -232,6 +239,8 @@ SPartitionInfo CreateNewPartitionDialog::getPartition()
 void CreateNewPartitionDialog::initPartition()
 {
     m_newPartitionInfo.id = QUuid::createUuid().toString();
+    m_newPartitionInfo.device = m_freePartitionInfo.device;
+    m_newPartitionInfo.deviceSize = m_freePartitionInfo.deviceSize;
     m_newPartitionInfo.partitionType = CommonFunc::partitionTypeToText().value(m_typeCmb->currentText());
     m_newPartitionInfo.isStartPoint = std::map<QString, bool>{CommonFunc::getPartitionStartPointText(), CommonFunc::getPartitionEndPointText()}[m_locationCmb->currentText()];
     m_newPartitionInfo.filesystem = m_fileSystemCmb->currentText();
@@ -253,7 +262,10 @@ bool CreateNewPartitionDialog::limitEditorSizeByMountPoint()
     qint64 minSize = 0;
     bool useMinSize = false;
     QString partitionLabel = CommonFunc::getPartitionLabel(m_newPartitionInfo);
-    if (gBootLabel == partitionLabel) {
+    if (m_newPartitionInfo.isBiosBoot) {
+        minSize = 1;
+        useMinSize = true;
+    } else if (gBootLabel == partitionLabel) {
         minSize = qMax((qint64)CommonFunc::getSettingsInt("DI_BOOT_SIZE_CONFIG"), ghostMinSize);
         useMinSize = true;
     } else if (gRootLabel == partitionLabel || gRootaLabel == partitionLabel) {
@@ -321,6 +333,8 @@ QStringList CreateNewPartitionDialog::getFileSystemList()
     if (CommonFunc::isUEFI()) {
         list.removeAll("vfat");
         list.append("vfat");
+    } else if (PartitionSeniorManager::instance()->findDev(m_freePartitionInfo.device).type == EDisklabelType::GPT) {
+        list.append(::QObject::tr("BIOS boot (no filesystem)"));
     }
 
     return list;

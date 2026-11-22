@@ -88,6 +88,12 @@ bool ConventionalPartition::diskTask(const QString &config, QString &err)
 
     // 清理磁盘并处理格式化
     for (auto& in : devinfos) {
+        if (in.operate == EPartitionOperate::PartitionNormal)
+            continue;
+        if (in.operate != EPartitionOperate::PartitionCreate && in.operate != EPartitionOperate::PartitionEdit) {
+            err = "Unsupported partition-table operation";
+            return false;
+        }
         // 清理磁盘上的状态
         if (!CommonFunc::clearDeviceStatus(in.device.device, err)) {
             return false;
@@ -228,7 +234,8 @@ bool ConventionalPartition::lvmTask(const QString &config, QList<SLVMOperate> &i
             default:break;
         }
 
-        if (in.lvm.isCrypt && !(in.lvm.cryptPassword.isEmpty())) {
+        if ((in.operate == EPartitionOperate::PartitionCreate || in.operate == EPartitionOperate::PartitionEdit)
+                && in.lvm.isCrypt && !(in.lvm.cryptPassword.isEmpty())) {
             CommonFunc::setRecoveryKey();
             // 设置加密卷标签
             QString cryptLabel = (!in.lvm.mountPoint.compare("/")) ? "System" : "";

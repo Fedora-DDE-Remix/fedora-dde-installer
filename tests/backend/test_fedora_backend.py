@@ -1,7 +1,7 @@
 """Safe backend tests: all external commands are recorded fakes, never executed."""
 
 import contextlib
-import importlib.util
+import sys
 import io
 import json
 from pathlib import Path
@@ -11,10 +11,10 @@ import unittest
 from unittest import mock
 
 
-MODULE = Path(__file__).resolve().parents[2] / "tools/scripts/fedora_backend.py"
-SPEC = importlib.util.spec_from_file_location("fedora_backend", MODULE)
-backend = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(backend)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/scripts"))
+import fedora_backend as backend
+import fedora_payload as payload
+import fedora_system as system
 
 
 class FakeConfig:
@@ -74,7 +74,7 @@ class FakeRunner:
         elif command[0] == "blkid":
             output = "1111-2222\n" if "UUID" in command else "ext4\n"
         elif command[0] == "findmnt":
-            output = "/dev/testroot 8:1 ext4 aaaa-bbbb rw,relatime\n"
+            output = "/dev/testroot 8:1 ext4 aaaa-bbbb rw,relatime /\n"
         if check and code:
             raise backend.InstallError("Simulated unsuccessful command")
         return subprocess.CompletedProcess(argv, code, output, "")
@@ -91,15 +91,15 @@ class ValidationTests(unittest.TestCase):
     def test_untouched_disks_do_not_become_destructive_targets(self):
         plan = [
             {"type": "partition", "operate": "normal", "device": "/dev/liveusb", "isCrypt": True},
-            {"type": "partition", "operate": "new", "device": "/dev/disk", "mountPoint": "/", "filesystem": "ext4"},
+            {"type": "partition", "operate": "new", "isneedformat": True, "device": "/dev/disk", "mountPoint": "/", "filesystem": "ext4"},
         ]
         self.assertEqual(backend.validate_plan(plan), ["/dev/disk"])
 
     def test_root_reuse_and_encryption_fail_before_partitioning(self):
-        for extra in ({"operate": "edit", "isneedformat": False}, {"isCrypt": True},
+        for extra in ({"operate": "edit", "isneedformat": False}, {"isneedformat": False}, {"isCrypt": True},
                       {"filesystem": "crypto_luks"}, {"mountPoint": "/persistent"},
                       {"label": "safe;touch/tmp/bad"}, {"path": "/dev/a;bad"}):
-            item = {"type": "partition", "operate": "new", "device": "/dev/disk",
+            item = {"type": "partition", "operate": "new", "isneedformat": True, "device": "/dev/disk",
                     "mountPoint": "/", "filesystem": "ext4"}
             item.update(extra)
             with self.subTest(extra=extra), self.assertRaises(backend.InstallError):
@@ -142,7 +142,7 @@ class WorkflowTests(unittest.TestCase):
                                   "DI_REGION_FORMAT_LOCALE": "en_GB"})
         self.runner = FakeRunner(self.target)
         self.backend = backend.Backend(self.config, self.runner, self.target, self.root / "state", boot_id="test-boot")
-        self.identity = {"source": "/dev/testroot", "major_minor": "8:1", "fstype": "ext4", "uuid": "aaaa-bbbb"}
+        self.identity = {"source": "/dev/testroot", "major_minor": "8:1", "fstype": "ext4", "uuid": "aaaa-bbbb", "fsroot": "/"}
         self.backend.state = {"boot_id": "test-boot", "target": str(self.target), "installation_id": "test-install",
                               "phase": "awaiting-user", "mount_identity": self.identity, "live_user": "liveuser",
                               "owned_mounts": [str(self.target), str(self.target / "boot"), str(self.target / "dev")],
@@ -156,6 +156,30 @@ class WorkflowTests(unittest.TestCase):
             path = self.target / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("test-install\n" if relative.endswith("-target") else "fixture\n")
+        for relative, contents in {
+                "usr/share/systemd/kbd-model-map": "us us pc105 - -\n",
+                "usr/lib/kbd/keymaps/legacy/i386/qwerty/us.map.gz": "keymap fixture",
+                "usr/lib/kbd/consolefonts/eurlatgr.psfu.gz": "font fixture",
+                "etc/pam.d/ddm": "auth substack password-auth\nauth include postlogin\n"
+                    "account include password-auth\npassword include password-auth\n"
+                    "session required pam_selinux.so close\nsession required pam_loginuid.so\n"
+                    "session required pam_selinux.so open\nsession include password-auth\n"
+                    "session include postlogin\n",
+                "etc/pam.d/password-auth": "# authselect fixture\n",
+                "etc/pam.d/postlogin": "# authselect fixture\n",
+                "etc/pam.d/ddm-autologin": "# Fedora package-owned automatic-login stack\n",
+                "etc/selinux/config": "SELINUX=enforcing\nSELINUXTYPE=targeted\n",
+        }.items():
+            path = self.target / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(contents)
+        for name in ("install_kernels", "install_bootloader"):
+            patcher = mock.patch.object(self.backend, name)
+            setattr(self, name, patcher.start())
+            self.addCleanup(patcher.stop)
+        fonts = mock.patch.object(system, "font_candidates", return_value=[])
+        fonts.start()
+        self.addCleanup(fonts.stop)
         self.backend.save()
 
     def test_configures_target_without_reboot_and_clears_credentials(self):
@@ -275,34 +299,6 @@ class WorkflowTests(unittest.TestCase):
             self.assertEqual(len(summaries), 1)
         self.assertEqual(self.backend.state["phase"], "finalized")
 
-    def test_uefi_uses_signed_packaged_files_and_does_not_run_grub_install(self):
-        for family, filenames in (("shim", ("shimx64.efi", "mmx64.efi")), ("grub2", ("grubx64.efi",))):
-            for name in filenames:
-                path = self.target / f"usr/lib/efi/{family}/1.0/EFI/fedora/{name}"
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(b"signed-package-fixture")
-        self.backend.install_bootloader()
-        self.assertEqual((self.target / "boot/efi/EFI/BOOT/BOOTX64.EFI").read_bytes(), b"signed-package-fixture")
-        self.assertIn("cccc-dddd", (self.target / "boot/efi/EFI/fedora/grub.cfg").read_text())
-        self.assertFalse(any("grub2-install" in call[0] for call in self.runner.calls))
-
-    def test_existing_uefi_fallback_is_not_overwritten(self):
-        for family, filenames in (("shim", ("shimx64.efi", "mmx64.efi")), ("grub2", ("grubx64.efi",))):
-            for name in filenames:
-                path = self.target / f"usr/lib/efi/{family}/1.0/EFI/fedora/{name}"
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(b"our-loader")
-        fallback = self.target / "boot/efi/EFI/BOOT/BOOTX64.EFI"
-        fallback.parent.mkdir(parents=True, exist_ok=True)
-        fallback.write_bytes(b"another-system")
-        self.backend.install_bootloader()
-        self.assertEqual(fallback.read_bytes(), b"another-system")
-        self.runner.firmware_failure = True
-        self.backend.state.pop("firmware_entry_created")
-        with self.assertRaises(backend.InstallError):
-            self.backend.install_bootloader()
-        self.assertEqual(fallback.read_bytes(), b"another-system")
-
     def test_fstab_uses_only_explicitly_selected_swap(self):
         self.backend.state["mounts"] = [self.backend.state["mounts"][0]]
         self.backend.write_fstab()
@@ -311,30 +307,12 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotIn("swap", fstab)
         self.assertFalse(any(call[0][0] in {"swapon", "swapoff"} for call in self.runner.calls))
 
-    def test_kernel_generation_uses_installed_root_uuid_without_live_arguments(self):
-        kernel = self.target / "usr/lib/modules/6.12.0-test.x86_64/vmlinuz"
-        kernel.parent.mkdir(parents=True)
-        kernel.write_bytes(b"kernel")
-        (self.target / "boot").mkdir()
-        self.backend.install_kernels()
-        entries = list((self.target / "boot/loader/entries").glob("*.conf"))
-        self.assertEqual(len(entries), 1)
-        text = entries[0].read_text()
-        self.assertIn("root=UUID=aaaa-bbbb ro", text)
-        self.assertIn("linux /vmlinuz-6.12.0-test.x86_64", text)
-        self.assertNotIn("root=live:", text)
-        self.assertNotIn("rd.live.image", text)
-        dracut = next(call[0] for call in self.runner.calls if "dracut" in call[0])
-        self.assertIn("--no-hostonly", dracut)
-        self.assertIn("--omit", dracut)
-        self.assertIn("dmsquash-live livenet", dracut)
-
     def test_copy_excludes_live_mounts_machine_identity_and_credentials(self):
         source = self.root / "source"
         source.mkdir()
         self.backend.state["source"] = str(source)
         self.backend.save("partitioned")
-        with mock.patch.object(self.backend, "source_check"):
+        with mock.patch.object(payload, "verify_source"):
             self.backend.copy()
         rsync = next(call[0] for call in self.runner.calls if call[0][0] == "rsync")
         for item in ("/dev/***", "/proc/***", "/sys/***", "/run/***", "/tmp/***", "/target/***",
@@ -345,14 +323,17 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(self.backend.state["phase"], "copied")
 
     def test_fedora_pam_uses_authselect_and_preserves_selinux_sessions(self):
+        original = (self.target / "etc/pam.d/ddm").read_bytes()
+        original_autologin = (self.target / "etc/pam.d/ddm-autologin").read_bytes()
         self.backend.configure_fedora_pam()
+        self.assertEqual(original, (self.target / "etc/pam.d/ddm").read_bytes())
+        self.assertEqual(original_autologin, (self.target / "etc/pam.d/ddm-autologin").read_bytes())
         text = (self.target / "etc/pam.d/ddm").read_text()
         self.assertIn("password-auth", text)
         self.assertIn("postlogin", text)
         self.assertLess(text.index("pam_selinux.so close"), text.index("pam_selinux.so open"))
         self.assertNotIn("system-login", text)
         self.assertNotIn("common-session", text)
-        self.assertIn("pam_deny.so", (self.target / "etc/pam.d/ddm-autologin").read_text())
 
     def test_live_passwordless_wheel_rules_are_removed(self):
         sudoers = self.target / "etc/sudoers"

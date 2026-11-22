@@ -11,10 +11,12 @@
 ## 安装流程
 
 1. 在 Fedora DDE Remix Live 桌面启动安装器，选择语言和目标分区，确认安装。
-2. 写入系统，生成目标系统的 initramfs、BLS 启动项和 GRUB 配置。
+2. 校验并挂载原始只读 Live 镜像，按已确认的计划分区、写入系统。
 3. **保持当前 Live 会话，无需重启**，直接配置用户名、密码、主机名、键盘、
    时区和区域格式。账户和设置写入已安装的目标系统。
-4. 配置成功并完成目标分区卸载后，显示完成页。用户可以选择“立即重启”，
+4. 使用 Fedora 自带的 `kernel-install`、`dracut` 和 GRUB 工具生成普通及救援
+   启动项，使 initramfs 包含刚选择的键盘和区域设置。完成标记和分区卸载后，
+   显示完成页。用户可以选择“立即重启”，
    也可以继续使用 Live 桌面；安装器不会自动重启。
 
 账户配置失败时，可以修改设置或重试配置；该操作不会重新分区或重新安装系统。
@@ -28,24 +30,41 @@
 | 目标发行版 | Fedora 45，普通 RPM 系统 |
 | 架构 | x86_64、aarch64；需分别构建和验证 |
 | 桌面 | DDE，DDM 登录管理器，Treeland 会话 |
-| 根文件系统 | ext4、XFS 或 Btrfs；默认自动分区使用 ext4 |
+| 根文件系统 | 默认 Btrfs，`root`、`home` 子卷共享空间，`compress=zstd:1`；手动支持 ext4、XFS、Btrfs |
+| 交换空间 | 默认使用 Fedora 的 zram，不自动划分磁盘 swap；支持手动指定 swap |
 | 分区模式 | 全盘安装、普通手工分区、空闲空间安装 |
 | `/boot` | **必须有独立的 ext4 分区，且新建或显式选择格式化**；默认大小 2 GiB |
 | UEFI | `/boot/efi` 使用 FAT32 EFI 系统分区，可复用现有 ESP；使用 Fedora 软件包中的 shim/GRUB 文件 |
-| BIOS | 仅 x86_64，当前限单磁盘 MBR/MS-DOS 布局 |
+| BIOS | 仅 x86_64、单磁盘；新建 GPT + 1 MiB `bios_grub`，也可安装到现有 MBR 布局 |
 | 最小安装容量 | 默认安装磁盘容量门槛为 50 GB |
 | 当前不支持 | 加密安装、LVM 安装、镜像克隆、不可变系统部署、首次开机再创建账户 |
 
 手工分区时，根分区和 `/boot` 都必须新建或明确选择格式化。其他分区能否保留，
 以界面显示的操作计划为准。此版本要求独立 `/boot`，不接受把它放在根文件系统内。
+新建普通文件系统分区也必须明确标记格式化，不能依赖新分区范围内遗留的旧签名。
+手动指定独立 `/home` 时保留该选择，不在 Btrfs 根内另建 `home` 子卷。
+
+## 与 Fedora 官方安装结果对齐
+
+0.2.0 按 Fedora 45 Anaconda 45.30 的源码与 Fedora 包策略改进现有后端：
+只复制原始只读 payload，保留软件包目录和元数据；使用 Fedora 内核安装钩子、
+救援启动项、目标机 dracut 默认、固件匹配的 shim/GRUB 和官方 EFI stub 工具；
+保留 authselect、DDM RPM 的 PAM 与 SELinux 配置；配置正式账户后再生成最终引导文件。
+
+这些改进仍使用本项目的分区和阶段后端。**没有接入完整 Anaconda/Blivet 引擎，
+也没有完成与官方安装结果的虚拟机逐项验收。** 当前不迁移 Live 会话中新连接的
+Wi-Fi/VPN，不执行 Anaconda/Kickstart 的任意安装后脚本。差异、ISO 前提和验收项见
+[docs/FEDORA_ALIGNMENT.md](docs/FEDORA_ALIGNMENT.md)。
 
 ## 开发状态与验证边界
 
-当前为开发版。2026-11-22 的 [GitHub Actions 构建](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353)
+当前为开发版。0.1.0 基线在 2026-11-22 的 [GitHub Actions 构建](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353)
 已通过完整 Qt 6 / DTK 6 GUI 编译、Fedora 45 x86_64 RPM/SRPM 打包和两项 CTest
 回归测试；[构建产物可在这里下载](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45039833353/artifacts/14760909567)。
 验证提交为 `0bd3bb575d7322ace5579f89303cc1864d40d9c5`。本次直接使用正式 COPR
 仓库中的开发包，未启用临时 SDK 补建。
+0.2.0 的完整编译和回归结果以 [GitHub Actions](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions)
+对应提交的运行记录为准，不能用上述旧构建证明新版本已通过。
 
 **Live ISO 虚拟机安装、移除 ISO 后首次启动及 aarch64 构建尚未完成验证。**
 已通过的工作流及后端测试不会操作真实磁盘。
@@ -125,13 +144,22 @@ rpmbuild --define "_topdir $PWD/rpmbuild" \
 将构建出的 RPM 放入镜像构建器可访问的软件源，在 Live 镜像的软件包列表中加入
 `fedora-dde-installer`。基础镜像需要是普通 Fedora RPM 根文件系统，并提供可写的
 Live 运行环境。镜像应包含 DDE/DDM/Treeland、目标内核、对应架构的引导软件包、
-SELinux 策略、所需 `glibc-langpack-*` 和 SPEC 声明的运行依赖。
+SELinux 策略及文件标签、所需 `glibc-langpack-*`、kbd 键盘/字体数据和 SPEC 声明的运行依赖。
+特别需要 `ddm >= 0.5.0-6` 的 Fedora PAM 配方、`zram-generator-defaults`、
+`dracut-config-rescue` 和有效的 Fedora kernel-install 钩子。DDM 配方位于
+[桌面软件包仓库](https://github.com/Fedora-DDE-Remix/Deepin-Desktop-Environment/tree/main/ddm)；
+配方提交、RPM 构建、COPR 仓库发布是三个不同步骤，不能只更新 SPEC 就宣称依赖可安装。
 
 Live 镜像需通过 Fedora dracut Live 启动路径启动，内核参数包含 `rd.live.image`
 或 `root=live:`。桌面中的“安装 Fedora DDE Remix”入口执行
 `/usr/bin/fedora-dde-installer-launch`；启动器会准备本会话配置，然后打开安装界面。
 它使用 Live 镜像现有的 sudo 授权，或通过 polkit 请求认证，不额外创建免密规则。
 图形授权路径需要 Live 桌面提供 XWayland、`DISPLAY` 和对应显示认证信息。
+
+`DI_SOURCE_ROOT=auto` 自动从 Fedora Live 基础设备独立挂载只读源，支持带正确标签的
+EROFS/SquashFS 或普通 Fedora Live 根镜像；不会把正在运行的 `/` 当作源。
+调试时显式指定的源也必须是独立只读挂载。Live 内核必须启用 SELinux；
+允许 permissive 模式，拒绝 `selinux=0`，避免标签工具成功退出却没有实际标记文件。
 
 目标系统完成账户配置后，会移除安装器和 Live 专用启动配置，保留正常 DDM 登录。
 初次集成应先生成测试 ISO，在虚拟机中验证完整流程，再提供安装镜像下载。

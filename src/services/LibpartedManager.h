@@ -13,6 +13,7 @@ public:
 
     bool resizeExtendedPartition(const SPartitionInfo& partInfo);
     QString getPartitionPath(const SPartitionInfo& partInfo);
+    bool setBIOSBootFlag(const SPartitionInfo& partInfo, QString& error);
 
 private:
     LibpartedManager();

@@ -30,7 +30,7 @@ public:
     void setFormatDisk(const SDeviceInfo &devName);
     bool isNewSystem(const SDeviceInfo &devName);
     int getNewPrimaryPartitionCnt(const SDeviceInfo &devName);
-    qint64 getSystemMinSpace();
+    qint64 getSystemMinSpace(const SDeviceInfo &devName);
 
     bool checkPartition(QString &log);
     bool findFirstESP(SPartitionInfo &info);
@@ -39,6 +39,7 @@ public:
 
 private:
     SPartitionInfo getEFIPartition();
+    bool hasBIOSBootPartition(const SDeviceInfo &devName) const;
     bool existSWAPPartition();
     bool existLogicalPartition(const SDeviceInfo &devName);
     int getPrimaryPartitionCnt(const SDeviceInfo &devName);

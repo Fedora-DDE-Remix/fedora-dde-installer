@@ -81,8 +81,8 @@
         <translation>请选择安装模式</translation>
     </message>
     <message>
-        <source>Creates a boot partition, swap, and a writable root filesystem using the remaining disk space. All data on the selected disk will be erased.</source>
-        <translation>将创建引导分区、交换分区，并使用剩余空间创建可写根分区。所选磁盘上的全部数据将被清除。</translation>
+        <source>Creates boot partitions and a compressed Btrfs filesystem. Root and /home share the remaining space. Swap uses zram. All data on the selected disk will be erased.</source>
+        <translation>将创建引导分区和启用压缩的 Btrfs 文件系统。根目录和 /home 共享剩余空间，交换空间使用 zram。所选磁盘上的全部数据将被清除。</translation>
     </message>
 </context>
 <context>
@@ -202,8 +202,8 @@
         <translation>至少需要 %1 GiB 磁盘空间。</translation>
     </message>
     <message>
-        <source>Creates a boot partition, swap, and a writable root filesystem on the selected disk. All data on that disk will be erased.</source>
-        <translation>将在所选磁盘上创建引导分区、交换分区和可写根分区。该磁盘上的全部数据将被清除。</translation>
+        <source>Creates boot partitions and a compressed Btrfs filesystem on the selected disk. Root and /home share space unless a separate data disk is selected. Swap uses zram. All data on the selected disk will be erased.</source>
+        <translation>将在所选磁盘上创建引导分区和启用压缩的 Btrfs 文件系统。未选择独立数据盘时，根目录和 /home 共享空间；交换空间使用 zram。所选磁盘上的全部数据将被清除。</translation>
     </message>
 </context>
 <context>
@@ -2104,18 +2104,6 @@ If you need more help, you can join the official group, call the 400 hotline or 
         <translation>/persistent 分区，数据分区</translation>
     </message>
     <message>
-        <location filename="../src/widgets/HelpDialog.cpp" line="129"/>
-        <source>/swap Partition, SWAP Partition</source>
-        <translation>/swap 分区，交换分区</translation>
-    </message>
-    <message>
-        <location filename="../src/widgets/HelpDialog.cpp" line="129"/>
-        <source>Size: Based on the amount of physical memory
-</source>
-        <translation>大小: 根据物理内存大小设置
-</translation>
-    </message>
-    <message>
         <location filename="../src/widgets/HelpDialog.cpp" line="140"/>
         <source>Create Init Backup:</source>
         <translation>创建初始化备份</translation>
@@ -2138,11 +2126,6 @@ Create init backup cost more time.</source>
 </source>
         <translation>/boot/efi：系统启动分区，存储启动文件
 </translation>
-    </message>
-    <message>
-        <location filename="../src/widgets/HelpDialog.cpp" line="164"/>
-        <source>/SWAP: System swap partition, ensure system performance when there is insufficient memory.</source>
-        <translation>/SWAP：系统交换分区，内存不足时保障系统运行性能</translation>
     </message>
     <message>
         <location filename="../src/widgets/InstallConfirmDialog.cpp" line="119"/>
@@ -2381,8 +2364,8 @@ Create init backup cost more time.</source>
         <translation>正在安装引导程序并配置系统…</translation>
     </message>
     <message>
-        <source>Legacy BIOS installation requires an MBR disk. Use Full Disk to create this layout.</source>
-        <translation>传统 BIOS 安装需要 MBR 磁盘。可以使用全盘安装创建该布局。</translation>
+        <source>Legacy BIOS installation requires a GPT or MBR partition table.</source>
+        <translation>传统 BIOS 安装需要 GPT 或 MBR 分区表。</translation>
     </message>
     <message>
         <source>No reviewed partition plan is available.</source>
@@ -2436,6 +2419,66 @@ Create init backup cost more time.</source>
         <source>Use lowercase letters, numbers, dashes (-) and underscores (_). Start with a lowercase letter or underscore.</source>
         <translation>请使用小写字母、数字、连字符（-）和下划线（_），并以小写字母或下划线开头。</translation>
     </message>
+    <message>
+        <source>BIOS boot (no filesystem)</source>
+        <translation>BIOS 引导（无文件系统）</translation>
+    </message>
+    <message>
+        <source>Reserved for GRUB on a BIOS/GPT disk; this partition is not formatted or mounted.</source>
+        <translation>用于 BIOS/GPT 磁盘上的 GRUB 引导；该分区不格式化，也不挂载。</translation>
+    </message>
+    <message>
+        <source>The BIOS boot partition must be at least 1 MiB, unformatted and without a mount point.</source>
+        <translation>BIOS 引导分区至少需要 1 MiB，不能格式化或设置挂载点。</translation>
+    </message>
+    <message>
+        <source>Create an unformatted BIOS boot partition of at least 1 MiB on the GPT disk.</source>
+        <translation>请在 GPT 磁盘上创建至少 1 MiB 的未格式化 BIOS 引导分区。</translation>
+    </message>
+    <message>
+        <source>Btrfs root and /home share system space. Set data space above zero only for a separate /home partition.</source>
+        <translation>Btrfs 根目录和 /home 共享系统空间。仅在需要独立 /home 分区时分配数据空间。</translation>
+    </message>
+    <message>
+        <source>BIOS boot partition (GPT)</source>
+        <translation>BIOS 引导分区（GPT）</translation>
+    </message>
+    <message>
+        <source>At least 1 MiB, with no filesystem or mount point. Not needed on an existing MBR disk.</source>
+        <translation>至少需要 1 MiB，不能设置文件系统或挂载点。沿用已有 MBR 分区表时无需此分区。</translation>
+    </message>
+    <message>
+        <source>Btrfs by default; ext4 and XFS are also supported.
+Root and /home share Btrfs space unless /home is separate.
+</source>
+        <translation>默认使用 Btrfs，也支持 ext4 和 XFS。
+未单独挂载 /home 时，它与根目录共享 Btrfs 空间。
+</translation>
+    </message>
+    <message>
+        <source>Swap (optional)</source>
+        <translation>交换空间（可选）</translation>
+    </message>
+    <message>
+        <source>zram provides swap by default. A linux-swap partition is optional and has no mount point.</source>
+        <translation>默认通过 zram 提供交换空间，也可手动创建 linux-swap 分区，无需挂载点。</translation>
+    </message>
+    <message>
+        <source>/boot: Separate ext4 boot partition.
+</source>
+        <translation>/boot：独立的 ext4 引导分区。
+</translation>
+    </message>
+    <message>
+        <source>BIOS boot: An unformatted 1 MiB area on GPT disks.
+</source>
+        <translation>BIOS 引导：GPT 磁盘上的 1 MiB 未格式化区域。
+</translation>
+    </message>
+    <message>
+        <source>Swap uses zram by default. An on-disk swap partition is optional.</source>
+        <translation>默认使用 zram 交换空间，磁盘交换分区可选。</translation>
+    </message>
 </context>
 <context>
     <name>SelectFileWidget</name>
@@ -2453,8 +2496,8 @@ Create init backup cost more time.</source>
         <translation>确定取消加密%1 ？</translation>
     </message>
     <message>
-        <source>Create a root filesystem and a separate ext4 /boot partition. Select formatting for both. UEFI also requires a FAT32 /boot/efi partition.</source>
-        <translation>请创建根分区和独立的 ext4 /boot 分区，并选择格式化这两个分区。UEFI 安装还需要 FAT32 /boot/efi 分区。</translation>
+        <source>Format root and a separate ext4 /boot. UEFI needs FAT32 /boot/efi; BIOS on GPT needs an unformatted BIOS boot partition. Btrfs root and /home share space unless /home is separate. Swap is optional.</source>
+        <translation>请格式化根分区及独立的 ext4 /boot。UEFI 需要 FAT32 /boot/efi，BIOS 配合 GPT 需要未格式化的 BIOS 引导分区。未单独挂载 /home 时，它与 Btrfs 根目录共享空间。交换分区可选。</translation>
     </message>
 </context>
 <context>

@@ -12,7 +12,6 @@
 #include "FormatDiskTipsDialog.h"
 #include "EditLVMDialog.h"
 #include "ResetListDialog.h"
-#include "CreateSwapDialog.h"
 #include "HelpLabel.h"
 #include "HelpDialog.h"
 #include "PasswdDialog.h"
@@ -305,19 +304,8 @@ SeniorPartitionFrame::SeniorPartitionFrame(QWidget *parent):PartitionFrameBase(p
                     return;
                 }
             }
-            //不存在swap分区,弹框提示用户创建swap分区
-            QString swapPartId = "";
-            if (!PartitionSeniorManager::instance()->isHaveCreatedSwap(swapPartId)) {
-                CreateSwapDialog dialog;
-                dialog.move(qApp->primaryScreen()->availableSize().width() / 2 - dialog.width() / 2,
-                            qApp->primaryScreen()->availableSize().height() / 2 - dialog.height() / 2);
-                if (dialog.exec() == DDialog::Accepted) {
-                    setFocus();
-                    return;
-                }
-                setFocus();
-            }
-
+            // Fedora uses zram by default. Explicit swap partitions remain
+            // available in the filesystem selector without a mandatory prompt.
             Q_EMIT this->next();
         }
     });
@@ -473,7 +461,7 @@ void SeniorPartitionFrame::decryptSinglePartition(const QString &partId, const Q
 void SeniorPartitionFrame::updateTs()
 {
     m_titleWidget->setTitleLabelProperty(::QObject::tr("Advanced"), "");
-    m_titleWidget->setTipsLabelProperty(tr("Create a root filesystem and a separate ext4 /boot partition. Select formatting for both. UEFI also requires a FAT32 /boot/efi partition."), "font-size:16px;font-weight:Medium;");
+    m_titleWidget->setTipsLabelProperty(tr("Format root and a separate ext4 /boot. UEFI needs FAT32 /boot/efi; BIOS on GPT needs an unformatted BIOS boot partition. Btrfs root and /home share space unless /home is separate. Swap is optional."), "font-size:16px;font-weight:Medium;");
 
     m_listReset->setText(::QObject::tr("Reset List"));
 

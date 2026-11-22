@@ -864,7 +864,8 @@ bool CommonFunc::isFirstBoot()
 
 bool CommonFunc::checkDisklabelType(const SDeviceInfo &deviceinfo)
 {
-    return isUEFI() ? (deviceinfo.type == EDisklabelType::GPT) : (deviceinfo.type == EDisklabelType::MsDos);
+    return deviceinfo.type == EDisklabelType::GPT
+            || (!isUEFI() && deviceinfo.type == EDisklabelType::MsDos);
 }
 
 bool CommonFunc::setDisklabelType(const SDeviceInfo &deviceinfo, QString &err)
@@ -1132,6 +1133,10 @@ bool CommonFunc::creatPartition(SPartitionInfo &info, QString &err)
 
     info.path = paths.first();
 
+    if (info.isBiosBoot && !LibpartedManager::instance()->setBIOSBootFlag(info, err)) {
+        return false;
+    }
+
     if (info.partitionType != EPartitionType::PartitionTypeExtension && info.isNeedFormat) {
         if (!formatPartitionOK(info, err)) {
             return false;
@@ -1277,6 +1282,10 @@ bool CommonFunc::formatPartition(SPartitionInfo &info, QString &err)
 
 bool CommonFunc::formatPartitionOK(SPartitionInfo &info, QString &err)
 {
+    if (info.isBiosBoot) {
+        err = "The BIOS boot partition must not be formatted";
+        return false;
+    }
     bool reset = true;
     CommonFunc::command("udevadm", {"settle", "--timeout=150"}, err);
     for (int i = 0; i < getSettingsInt("DI_FORMAT_PARTITION_CNT_CONFIG"); i++) {
@@ -2423,6 +2432,23 @@ SPartitionInfo CommonFunc::getBootPartitionInfo(const SDeviceInfo &dev)
     return info;
 }
 
+SPartitionInfo CommonFunc::getBIOSBootPartitionInfo(const SDeviceInfo &dev)
+{
+    SPartitionInfo info;
+    info.id = QUuid::createUuid().toString();
+    info.usage = ESpaceUsage::USE;
+    info.device = dev.device;
+    info.deviceSize = dev.size;
+    info.label = "BIOS-BOOT";
+    info.sectorSize = dev.sectors;
+    info.phySectorSize = dev.physectors;
+    info.size = 1; // Fedora BIOS/GPT embedding area: 1 MiB, never formatted.
+    info.byteSize = giDeviceUnitSize * giDeviceUnitSize;
+    info.isBiosBoot = true;
+    info.partitionType = EPartitionType::PartitionTypePrimary;
+    return info;
+}
+
 QString CommonFunc::bootloaderToString(bool isUefi)
 {
     return QString(isUefi ? "UEFI" : "legacy");
@@ -2486,6 +2512,8 @@ QString CommonFunc::enumTypeToString(EPartitionType parttitonType)
 
 QString CommonFunc::getPartitionLabel(const SPartitionInfo &part)
 {
+    if (part.isBiosBoot)
+        return "BIOS-BOOT";
     QString label;
     if (part.mountPoint.isEmpty()) {
         if (part.label.isEmpty()) {

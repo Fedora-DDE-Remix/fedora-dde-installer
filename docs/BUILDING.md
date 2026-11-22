@@ -89,7 +89,7 @@ rpmbuild --define "_topdir $PWD/rpmbuild" \
 
 Uncommitted edits are not included in `git archive`. To publish a release, update
 the SPEC to use an immutable release tag and record the source commit. The
-current `0.1.0-0.1` package is a development build, not a release qualification.
+current `0.2.0-0.1` package is a development build, not a release qualification.
 
 ## Installed layout
 

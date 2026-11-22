@@ -230,6 +230,7 @@ public:
 
     static SPartitionInfo getEFIPartitionInfo(const SDeviceInfo &dev);
     static SPartitionInfo getBootPartitionInfo(const SDeviceInfo &dev);
+    static SPartitionInfo getBIOSBootPartitionInfo(const SDeviceInfo &dev);
     static long getLabelStartNum();
     static QString getPartitionLabel(const SPartitionInfo &part);
     static QString getPartitionLabel(const SLVMInfo &part);

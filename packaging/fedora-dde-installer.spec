@@ -1,5 +1,5 @@
 Name:           fedora-dde-installer
-Version:        0.1.0
+Version:        0.2.0
 Release:        0.1%{?dist}
 Summary:        Fedora DDE Remix graphical Live installer
 License:        GPL-3.0-or-later
@@ -31,6 +31,7 @@ BuildRequires:  systemd-rpm-macros
 
 Requires:       qt6-qtsvg
 Requires:       python3
+Requires:       python3-langtable
 Requires:       bash
 Requires:       rsync
 Requires:       util-linux
@@ -40,8 +41,11 @@ Requires:       authselect
 Requires:       sudo
 Requires:       polkit
 Requires:       dracut
+Requires:       dracut-config-rescue
 Requires:       grub2-tools
+Requires:       grub2-tools-extra
 Requires:       grubby
+Requires:       kmod
 Requires:       efibootmgr
 Requires:       policycoreutils
 Requires:       selinux-policy-targeted
@@ -57,6 +61,8 @@ Requires:       xkeyboard-config
 Requires:       xorg-x11-server-Xwayland
 Requires:       systemd
 Requires:       systemd-udev
+Requires:       zram-generator-defaults
+Requires:       ddm >= 0.5.0-6
 %ifarch x86_64
 Requires:       grub2-efi-x64
 Requires:       shim-x64
@@ -100,7 +106,7 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 
 %files
 %license COPYING debian/copyright
-%doc README.md docs/BUILDING.md UPSTREAM.md
+%doc README.md docs/BUILDING.md docs/FEDORA_ALIGNMENT.md UPSTREAM.md
 %{_bindir}/%{name}
 %{_bindir}/%{name}-launch
 %{_bindir}/%{name}-config
@@ -116,6 +122,13 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_unitdir}/%{name}.service
 
 %changelog
+* Mon Nov 23 2026 Fedora DDE Remix contributors - 0.2.0-0.1
+- Install a validated read-only Fedora Live base with Btrfs root/home and zram.
+- Use Fedora kernel-install, rescue hooks, dracut and EFI configuration tools.
+- Configure accounts and keyboards before final boot image generation.
+- Require package-owned Fedora DDM PAM and preserve payload SELinux policy.
+- Preserve existing homes, untouched disks and other systems' EFI fallback.
+
 * Sun Nov 22 2026 Fedora DDE Remix contributors - 0.1.0-0.1
 - Initial Fedora 45 Qt 6 / DTK 6 installer adaptation.
 - Configure accounts in the installation session and use a writable root system.

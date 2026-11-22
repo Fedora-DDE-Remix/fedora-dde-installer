@@ -66,17 +66,20 @@ bool PartitionSeniorManager::isExistSameMountpointAsThePrimaryPartition(const QS
 SPartitionInfo PartitionSeniorManager::getEmptyDiskPartition(const SDeviceInfo &dev)
 {
     QMap<SDeviceInfo, QList<SPartitionInfo>> infos = PartitionSeniorManager::instance()->getSystemPartitionInfo();
+    // The table may just have been changed to GPT in the model. Preserve the
+    // current device key, including its isFormat flag, when replacing free space.
+    const SDeviceInfo currentDev = findDev(dev);
 
     SPartitionInfo free;
-    if (!infos.value(dev).isEmpty()) {
+    if (!infos.value(currentDev).isEmpty()) {
         // 更新空闲空间的起点位置从1M开始
-        free = infos.value(dev).first();
+        free = infos.value(currentDev).first();
         qint64 totaldevicesectors = dev.byteSize / dev.sectors;
         free.startPoint = (giDeviceUnitSize * giDeviceUnitSize) / free.sectorSize;
         free.endPoint = totaldevicesectors - (giDeviceUnitSize * giDeviceUnitSize) / free.sectorSize;
         free.byteSize = (free.endPoint + 1 - free.startPoint) * free.sectorSize;
         free.size = CommonFunc::bytesToM(free.byteSize);
-        PartitionOperateManager::instance()->updateDeviceInfo(dev, {free});
+        PartitionOperateManager::instance()->updateDeviceInfo(currentDev, {free});
     }
 
     return free;
@@ -274,6 +277,7 @@ void PartitionSeniorManager::newPartition(const SDeviceInfo &devName, const SPar
         in.isNeedFormat = part.isNeedFormat;
         in.isCryptHeader = part.isCryptHeader;
         in.isEFIPartition = (part.mountPoint == "/boot/efi");
+        in.isBiosBoot = part.isBiosBoot;
         if (in.size < free.size) {
             if (in.isStartPoint) {
                 in.startPoint = CommonFunc::getPartitionStartPoint(free.startPoint, free.sectorSize);
@@ -376,6 +380,7 @@ void PartitionSeniorManager::editPartition(const SDeviceInfo &devName, SPartitio
         curOpPart.label = CommonFunc::getPartitionLabel(part);
         curOpPart.path = part.path;
         curOpPart.isEFIPartition = (part.mountPoint == "/boot/efi");
+        curOpPart.isBiosBoot = part.isBiosBoot;
         bool canEncrypt = curOpPart.isNeedFormat && isPartitionCanEncrypt(curOpPart);
         curOpPart.isCanCrypt = canEncrypt && getCurrentEncryptStatus(curOpPart.id);
         if(canEncrypt) {
@@ -445,6 +450,8 @@ SPartitionInfo PartitionSeniorManager::delPartition(const SDeviceInfo &devName, 
         merge.index = -1;
         merge.path = "";
         merge.partUuid = "";
+        merge.isBiosBoot = false;
+        merge.isEFIPartition = false;
 
         //处理空闲分区的合并
         QList<SPartitionInfo> opListParts = getOperatorPartitions(dev);
@@ -762,14 +769,21 @@ bool PartitionSeniorManager::checkPartition(QString &log)
     QSet<QString> selectedDevices;
     const auto devices = PartitionOperateManager::instance()->getCurrentDeviceInfo();
     for (auto device = devices.cbegin(); device != devices.cend(); ++device) {
+        bool selected = false;
+        bool biosBoot = false;
         for (const auto &partition : device.value()) {
+            if (partition.usage == ESpaceUsage::USE && partition.isBiosBoot) {
+                if (!partition.filesystem.isEmpty() || !partition.mountPoint.isEmpty()
+                        || partition.isNeedFormat || partition.isCrypt || partition.size < 1) {
+                    log = ::QObject::tr("The BIOS boot partition must be at least 1 MiB, unformatted and without a mount point.");
+                    return false;
+                }
+                biosBoot = true;
+            }
             if (partition.usage != ESpaceUsage::USE || partition.mountPoint.isEmpty())
                 continue;
+            selected = true;
             selectedDevices.insert(device.key().device);
-            if (!CommonFunc::isUEFI() && device.key().type != EDisklabelType::MsDos) {
-                log = ::QObject::tr("Legacy BIOS installation requires an MBR disk. Use Full Disk to create this layout.");
-                return false;
-            }
             if (partition.isCrypt || !partition.cryptPassword.isEmpty()
                     || partition.mountPoint == "/persistent") {
                 log = ::QObject::tr("Choose ordinary writable partitions for Fedora DDE Remix.");
@@ -786,6 +800,16 @@ bool PartitionSeniorManager::checkPartition(QString &log)
                 boot = partition.filesystem == "ext4" && partition.isNeedFormat;
             if (partition.mountPoint == "/boot/efi" && !device.key().isStartDevice)
                 efi = partition.isEFIPartition || partition.filesystem == "vfat";
+        }
+        if (!CommonFunc::isUEFI() && selected) {
+            if (device.key().type == EDisklabelType::GPT && !biosBoot) {
+                log = ::QObject::tr("Create an unformatted BIOS boot partition of at least 1 MiB on the GPT disk.");
+                return false;
+            }
+            if (!CommonFunc::checkDisklabelType(device.key())) {
+                log = ::QObject::tr("Legacy BIOS installation requires a GPT or MBR partition table.");
+                return false;
+            }
         }
     }
     if (!CommonFunc::isUEFI() && selectedDevices.size() > 1) {
@@ -955,7 +979,7 @@ bool PartitionSeniorManager::findFirstESP(SPartitionInfo &bootloader)
 }
 
 bool PartitionSeniorManager::isNewPrimaryPartition(const SDeviceInfo &dev) {
-    if (CommonFunc::isUEFI()) {
+    if (findDev(dev).type == EDisklabelType::GPT) {
         return true;
     }
 
@@ -989,7 +1013,7 @@ bool PartitionSeniorManager::isNewPrimaryPartition(const SDeviceInfo &dev, const
 
 bool PartitionSeniorManager::isNewLogicalPartition(const SDeviceInfo &dev, const SPartitionInfo &free)
 {
-    if (CommonFunc::isUEFI()) {
+    if (findDev(dev).type != EDisklabelType::MsDos) {
         return false;
     }
 
@@ -1056,8 +1080,7 @@ bool PartitionSeniorManager::isNewEndLogicalPartition(const SDeviceInfo &dev, co
 bool PartitionSeniorManager::isFormatDisk(const SDeviceInfo &devName)
 {
     SDeviceInfo dev = findDev(devName);
-    bool guideTypeEQ = CommonFunc::isUEFI() ? (dev.type == EDisklabelType::GPT) : (dev.type == EDisklabelType::MsDos);
-    return !guideTypeEQ;
+    return !CommonFunc::checkDisklabelType(dev);
 }
 
 void PartitionSeniorManager::setFormatDisk(const SDeviceInfo &devName)
@@ -1155,6 +1178,15 @@ bool PartitionSeniorManager::checkNewRootPartitionIsBootloader(const SPartitionI
 bool PartitionSeniorManager::checkDialogNextEnable(const SPartitionInfo &info, QString &err)
 {
     err = QString();
+    if (info.isBiosBoot) {
+        if (CommonFunc::isUEFI() || findDev(info.device).type != EDisklabelType::GPT
+                || !info.filesystem.isEmpty() || !info.mountPoint.isEmpty()
+                || info.isNeedFormat || info.isCrypt || info.size < 1) {
+            err = ::QObject::tr("The BIOS boot partition must be at least 1 MiB, unformatted and without a mount point.");
+            return false;
+        }
+        return true;
+    }
     const QStringList supported = {"ext4", "xfs", "btrfs", "vfat", "linux-swap", "swap"};
     if (!supported.contains(info.filesystem) || info.isCrypt || info.mountPoint == "/persistent") {
         err = ::QObject::tr("Choose a supported filesystem on an ordinary writable partition.");
@@ -1187,13 +1219,7 @@ bool PartitionSeniorManager::checkDialogNextEnable(const SPartitionInfo &info, Q
         return false;
     }
 
-    // 引导分区的检查
-    QString loaderTip = QString(::QObject::tr("The %1 is a boot partition, and its file system can only be %2"));
-    if (!CommonFunc::isUEFI() && checkNewRootPartitionIsBootloader(info) && !bootFileSystem.contains(info.filesystem)) {
-        err = loaderTip.arg(CommonFunc::getPartitionMountText(info.mountPoint), bootFileSystem.join(splitChar));
-        return false;
-    }
-
+    // /boot is separate, so BIOS does not constrain the root filesystem.
     QString mountTip = ::QObject::tr("When the mount point is %1, the file system can only be %2.");
     if ("/boot" == info.mountPoint && !bootFileSystem.contains(info.filesystem)) {
        err = mountTip.arg(info.mountPoint, bootFileSystem.join(splitChar));
@@ -1256,6 +1282,8 @@ SPartitionInfo PartitionSeniorManager::mergePartitions(const SPartitionInfo &fir
         free.mountPoint = "";
         free.filesystem = "";
         free.index = -1;
+        free.isBiosBoot = false;
+        free.isEFIPartition = false;
         free.isCrypt = false;
         free.cryptPassword = "";
     }

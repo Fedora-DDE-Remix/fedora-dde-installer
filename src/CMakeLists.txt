@@ -16,6 +16,19 @@ target_include_directories(FedoraDDEInstallerCore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/services ${CMAKE_CURRENT_SOURCE_DIR}/widgets
     ${CMAKE_CURRENT_SOURCE_DIR}/interfaces)
 target_link_libraries(FedoraDDEInstallerCore PUBLIC ${LINK_LIBS})
+
+# Release builds resolve settings through environment variables, so the real
+# planner can be exercised with an isolated temporary configuration. Debug
+# builds intentionally pin the live installer configuration path instead.
+if(BUILD_TESTING AND CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+    add_executable(installer-partition-layout-test tests/PartitionLayoutTest.cpp
+        modules/task_partitions/PartitionTaskManager.cpp)
+    target_include_directories(installer-partition-layout-test PRIVATE modules/task_partitions)
+    target_link_libraries(installer-partition-layout-test PRIVATE FedoraDDEInstallerCore)
+    add_test(NAME installer-partition-layout
+        COMMAND installer-partition-layout-test ${CMAKE_SOURCE_DIR})
+endif()
+
 install(TARGETS FedoraDDEInstallerCore
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} NAMELINK_SKIP)
 install(FILES resources/timezone_alias

@@ -75,6 +75,7 @@ bool PartitionTaskManager::getDeviceOperator(const QString &conf, QList<SPartiti
             partitionOperateInfo.partition.partitionType = CommonFunc::qstringToEnumType(obj.value("partType").toString());
             partitionOperateInfo.partition.path          = obj.value("path").toString();
             partitionOperateInfo.partition.isNeedFormat  = obj.value("isneedformat").toBool();
+            partitionOperateInfo.partition.isBiosBoot    = obj.value("isBiosBoot").toBool();
             partitionOperateInfo.partition.isCrypt       = obj.value("isCrypt").toBool();
             partitionOperateInfo.partition.cryptPassword = obj.value("cryptPassword").toString();
             partitionOperateInfo.partition.isCryptHeader = obj.value("isCryptHeader").toBool();
