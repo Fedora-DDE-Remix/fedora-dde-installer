@@ -4,6 +4,12 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+    inputs:
+      bootstrap_widget:
+        description: Build the pinned Widget SDK for developer testing
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -38,11 +44,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Enable the project's DDE packages
         run: dnf -y copr enable mozixun/Fedora-DDE-Remix
-      - name: Build the missing pinned DTK Widget SDK RPM
+      - name: Build the optional pinned DTK Widget SDK RPM
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.bootstrap_widget }}
         shell: bash
         run: bash .github/scripts/bootstrap-dtk-widget.sh
       - name: Save the SDK RPMs and input checksums
-        if: always()
+        if: ${{ always() && github.event_name == 'workflow_dispatch' && inputs.bootstrap_widget }}
         uses: actions/upload-artifact@v4
         with:
           name: dtk6widget-6.7.54-fedora-45-x86_64

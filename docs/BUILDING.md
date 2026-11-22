@@ -118,8 +118,9 @@ installer/autostart configuration during finalization.
 ## Continuous integration and release verification
 
 The workflow first runs the non-destructive tests without GUI dependencies. A
-Fedora 45 container then builds the missing DTK Widget SDK RPM, installs the
-declared installer dependencies and builds source and binary RPMs for x86_64.
+Fedora 45 container then installs the declared dependencies from COPR and builds
+source and binary RPMs for x86_64. The desktop COPR is still being populated;
+rerun the normal workflow once the required development packages are published.
 Failure to resolve a required COPR package is a build failure. aarch64 RPMs must
 be built on an aarch64 builder; the x86_64 CI result does not validate them.
 
@@ -128,11 +129,15 @@ The first public workflow run
 passed the safe tests but stopped at dependency resolution: `cmake(Dtk6Gui)` and
 `cmake(Dtk6Widget)` were unavailable to that Fedora 45 container. COPR build
 `11374228` produced `dtk6gui-devel-6.7.54-2.fc45` and its build log confirms the
-correct `cmake(Dtk6Gui)` provide; no Widget package had yet been built in that
-COPR project. This failure occurred before compiling the installer.
+correct `cmake(Dtk6Gui)` provide. The project maintainer confirmed that the COPR
+build sequence was still in progress. This dependency failure occurred before
+compiling the installer and does not indicate an incorrect CMake package name.
 
-The CI helper `.github/scripts/bootstrap-dtk-widget.sh` builds only that missing
-Widget SDK in the temporary container. Its inputs are fixed:
+For developer testing, the optional CI helper
+`.github/scripts/bootstrap-dtk-widget.sh` can build the Widget SDK in the
+temporary container. It runs only when a workflow is manually dispatched with
+`bootstrap_widget=true`; the default is false, and normal pushes never build
+this substitute SDK. Its inputs are fixed:
 
 | Input | Pinned value |
 |---|---|
