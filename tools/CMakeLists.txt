@@ -1,47 +1,14 @@
-install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/functions"
-    DESTINATION ${INSTALL_TARGET}/tools
-    PATTERN "CMakeLists.txt" EXCLUDE
-    PATTERN ".gitkeep" EXCLUDE
-)
-
-install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts"
-    DESTINATION ${INSTALL_TARGET}/tools
-    PATTERN "CMakeLists.txt" EXCLUDE
-    PATTERN ".gitkeep" EXCLUDE
-)
-
-install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/hooks"
-    DESTINATION ${INSTALL_TARGET}/tools
-    PATTERN "CMakeLists.txt" EXCLUDE
-    PATTERN ".gitkeep" EXCLUDE
-)
-
-install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/check_hooks"
-    DESTINATION ${INSTALL_TARGET}/tools
-    PATTERN "CMakeLists.txt" EXCLUDE
-    PATTERN ".gitkeep" EXCLUDE
-)
-
-install(
-    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/systemd/"
-    DESTINATION /lib/systemd/system/
-    PATTERN "CMakeLists.txt" EXCLUDE
-    PATTERN ".gitkeep" EXCLUDE
-)
-
-install(
-    FILES ${CMAKE_CURRENT_SOURCE_DIR}/deepin-installer-core
-          ${CMAKE_CURRENT_SOURCE_DIR}/deepin-installer-first-boot-preinit
-          ${CMAKE_CURRENT_SOURCE_DIR}/deepin-installer-init
-          ${CMAKE_CURRENT_SOURCE_DIR}/deepin-installer-preinit
-          ${CMAKE_CURRENT_SOURCE_DIR}/deepin-installer-extra
-        ${CMAKE_CURRENT_SOURCE_DIR}/deepin-repairtool-launch
-    DESTINATION ${INSTALL_TARGET}/tools
-    PERMISSIONS OWNER_READ OWNER_EXECUTE
-                GROUP_READ GROUP_EXECUTE
-                WORLD_READ WORLD_EXECUTE
-)
+foreach(directory IN ITEMS functions scripts hooks)
+    install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/${directory}"
+        DESTINATION "${INSTALL_TARGET}/tools"
+        USE_SOURCE_PERMISSIONS
+        PATTERN "CMakeLists.txt" EXCLUDE PATTERN "__pycache__" EXCLUDE
+        PATTERN "*.pyc" EXCLUDE PATTERN ".gitkeep" EXCLUDE)
+endforeach()
+install(PROGRAMS
+    "${CMAKE_CURRENT_SOURCE_DIR}/fedora-dde-installer-core"
+    "${CMAKE_CURRENT_SOURCE_DIR}/fedora-dde-installer-init"
+    "${CMAKE_CURRENT_SOURCE_DIR}/fedora-dde-installer-preinit"
+    DESTINATION "${INSTALL_TARGET}/tools")
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/systemd/fedora-dde-installer.service"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/lib/systemd/system")

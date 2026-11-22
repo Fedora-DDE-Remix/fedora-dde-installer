@@ -14,6 +14,8 @@
 #include <QLocale>
 #include <QStandardPaths>
 #include <QSettings>
+#include <DDialog>
+#include <algorithm>
 
 #include <unicode/locid.h>
 #include <unicode/unistr.h>
@@ -28,6 +30,7 @@ const int LIST_VIEW_WIDTH = 685;
 
 RegionFormatFrame::RegionFormatFrame(QWidget *parent) : FramePluginInterface (parent)
 {
+    m_locale = CommonFunc::getSettingsString("DI_LOCALE");
     // 初始化数据部分
     m_langItemList = CommonFunc::getLanguageList();
     KeyboardLayoutManager::instance()->xkbLayoutMap(m_layoutMap);
@@ -102,7 +105,6 @@ void RegionFormatFrame::initListContent()
     QList<QPair<RegionFormatType, QString>> typeIcons = {{RegionFormatType::SelectLanguage, ":/images/region_format_language.svg"},
                                                                        {RegionFormatType::SelectKBLayout, ":/images/region_format_kblayout.svg"},
                                                                        {RegionFormatType::SetupTimezone,  ":/images/region_format_timezone.svg"},
-                                                                       {RegionFormatType::SelectRegion,   ":/images/region_format_area.svg"},
                                                                        {RegionFormatType::RegionFormat,   ":/images/region_format_format.svg"}};
 
     for (int i = 0; i < typeIcons.size(); i++) {
@@ -195,7 +197,7 @@ void RegionFormatFrame::initTimezoneItemContent(RegionFormatItemFrame &itemFrame
 
         if (timezoneName.isEmpty()) {
             qWarning() << "Timezone is empty in all places";
-            timezoneName = "Asia/Beijing";
+            timezoneName = "Asia/Shanghai";
         }
     }
     QStringList tms;
@@ -325,7 +327,8 @@ void RegionFormatFrame::initRegionFormatItemContent(RegionFormatItemFrame &itemF
         }
     }
 
-    QLocale regionFormatLocale = QLocale(CommonFunc::getSettingsString("DI_LOCALE"));
+    const QString saved = CommonFunc::getSettingsString("DI_REGION_FORMAT_LOCALE");
+    QLocale regionFormatLocale(saved.isEmpty() ? m_locale : saved);
 
     QString defaultLangRegionStr = langRegionTrans(regionFormatLocale);
     itemFrame.initListData(regionFormatList, regionFormatEnglishList, defaultLangRegionStr);
@@ -441,120 +444,49 @@ void RegionFormatFrame::onLanguageMenuSelected(int index)
     }
 }
 
-void RegionFormatFrame::writeConf()
+bool RegionFormatFrame::writeConf()
 {
-    QString currentLanguage = "";
-    int currentVariantIndex = 0;
-    QString currentTimeZone = "";
-    QLocale currentRegionLocale;
-    QLocale currentRegionFormatLocale;
-
-    // 获取各项目当前值
-    int rowCount = m_listWidget->count();
-    for (int i = 0; i < rowCount; ++i) {
-        RegionFormatItemFrame *item = qobject_cast<RegionFormatItemFrame *>(m_listWidget->itemWidget(m_listWidget->item(i)));
-        if (item->getItemType() == RegionFormatType::SelectLanguage) {
-            currentLanguage = item->getListDataText();
-        } else if (item->getItemType() == RegionFormatType::SelectKBLayout) {
-            currentVariantIndex = item->getListDataIndex();
-        } else if (item->getItemType() == RegionFormatType::SetupTimezone) {
-            currentTimeZone = m_totalTimeZones.value(item->getListDataText());
-        } else if (item->getItemType() == RegionFormatType::SelectRegion) {
-            currentRegionLocale = m_regionMap.value(item->getListDataText());
-        } else if (item->getItemType() == RegionFormatType::RegionFormat) {
-            currentRegionFormatLocale = m_regionFormatMap.value(item->getListDataText());
-        }
+    QString language;
+    QString timezone;
+    QString regionLocale;
+    int variantIndex = -1;
+    for (int i = 0; i < m_listWidget->count(); ++i) {
+        auto *item = qobject_cast<RegionFormatItemFrame *>(m_listWidget->itemWidget(m_listWidget->item(i)));
+        if (item->getItemType() == RegionFormatType::SelectLanguage)
+            language = item->getListDataText();
+        else if (item->getItemType() == RegionFormatType::SelectKBLayout)
+            variantIndex = item->getListDataIndex();
+        else if (item->getItemType() == RegionFormatType::SetupTimezone)
+            timezone = m_totalTimeZones.value(item->getListDataText());
+        else if (item->getItemType() == RegionFormatType::RegionFormat)
+            regionLocale = m_regionFormatMap.value(item->getListDataText()).name();
     }
-
-    // 保存语言配置
-    QString localeNameCode = "zh_CN";
-    LanguageList::iterator resultLangIter = std::find_if(m_langItemList.begin(), m_langItemList.end(), [=](const SLanguageItem &langItem){
-        return (langItem.localName == currentLanguage);
-    });
-
-    if (resultLangIter != m_langItemList.end()) {
-        localeNameCode = (*resultLangIter).locale;
-    }
-
-    CommonFunc::setSettingsValue("DI_LOCALE", localeNameCode);
-
-
-    // 保存键盘布局配置
-    QString layoutName(CommonFunc::get2AlphaCountryCode(localeNameCode).toLower());
-
-    if (!m_layoutMap.contains(layoutName)) {
-        qWarning() << QString("There is no keyboard setting for locale %1").arg(localeNameCode);
-    } else {
-        m_variantList = m_layoutMap.value(layoutName);
-
-        if (m_variantList.isEmpty()) {
-            qWarning() << QString("Thers is not variant in layout:%1").arg(layoutName);
-        }
-
-        QString variant = m_variantList.at(currentVariantIndex).name;
-        if (layoutName == variant) {
-            variant.clear();
-        }
-
-        CommonFunc::setSettingsValue("DI_LAYOUT", layoutName);
-        CommonFunc::setSettingsValue("DI_LAYOUT_VARIANT", variant);
-    }
-
-
-    // 保存时区配置
-    if (!TimezoneManager::instance()->isTimezoneInTab(currentTimeZone)) {
-        qWarning() << QString("Invalid timezone %1 in config").arg(currentTimeZone);
-        return;
-    }
-
-    const ZoneInfoList zoneinfoList = TimezoneManager::instance()->getZoneInfoList();
-    const SZoneInfo curZoneInfo = zoneinfoList[TimezoneManager::instance()->getZoneInfoIndexByTimezone(zoneinfoList, currentTimeZone)];
-    QString localtime;
-    if (curZoneInfo.country == "CN" && curZoneInfo.timezone != "Asia/Urumqi") {
-        localtime = "Asia/Shanghai";
-    } else {
-        localtime = currentTimeZone;
-    }
-
-    CommonFunc::setSettingsValue("DI_TIMEZONE", currentTimeZone);
-    CommonFunc::setSettingsValue("DI_LOCALTIME", localtime);
-
-    // 保存区域格式配置
-    //将被设置到org.deepin.region-format中country的值
-    QString countryStr = currentRegionLocale.territoryToString(currentRegionLocale.territory());
-    CommonFunc::setSettingsValue("DI_REGION", countryStr);
-
-    //将被设置到org.deepin.region-format中languageRegion的值
-    QString language = currentRegionFormatLocale.languageToString(currentRegionFormatLocale.language());
-    QString country = currentRegionFormatLocale.territoryToString(currentRegionFormatLocale.territory());
-    if ((currentRegionFormatLocale.territory() == QLocale::HongKong || currentRegionFormatLocale.territory() == QLocale::Taiwan)
-        && currentRegionFormatLocale.language() == QLocale::Chinese) {
-        language = "Traditional Chinese";
-    } else if (currentRegionFormatLocale.territory() == QLocale::China && currentRegionFormatLocale.language() == QLocale::Chinese) {
-        language = "Simplified Chinese";
-    }
-    QString langRegionFormatStr = QString("%1:%2").arg(language).arg(country);
-    CommonFunc::setSettingsValue("DI_REGION_FORMAT", langRegionFormatStr);
-
-    //将被设置到org.deepin.region-format中localeName的值
-    CommonFunc::setSettingsValue("DI_REGION_FORMAT_LOCALE" , currentRegionFormatLocale.name());
-
-    //将被设置到locale.conf中的值
-    auto supportedLocaleListRes = getSupportedLocale();
-    QString localeSet = "";
-    if (supportedLocaleListRes.has_value()) {
-        QStringList supportedLocaleList = supportedLocaleListRes.value();
-        if (QString otherLocaleName = currentRegionFormatLocale.name() + ".UTF-8";
-            supportedLocaleList.contains(otherLocaleName)) {
-            localeSet = otherLocaleName;
-        } else if (supportedLocaleList.contains(currentRegionFormatLocale.name())) {
-            localeSet = currentRegionFormatLocale.name();
-        }
-    }
-
-    CommonFunc::setSettingsValue("DI_REGION_FORMAT_LOCALE_SET", localeSet);
+    const auto selected = std::find_if(m_langItemList.cbegin(), m_langItemList.cend(),
+            [&language](const SLanguageItem &item) { return item.localName == language; });
+    if (selected == m_langItemList.cend() || !TimezoneManager::instance()->isTimezoneInTab(timezone))
+        return false;
+    QString layout = CommonFunc::get2AlphaCountryCode(selected->locale).toLower();
+    if (!m_layoutMap.contains(layout))
+        layout = (layout == "hk" || layout == "tw") ? "cn" : "us";
+    const auto variants = m_layoutMap.value(layout);
+    if (variantIndex < 0 || variantIndex >= variants.size())
+        return false;
+    QString variant = variants.at(variantIndex).name;
+    if (variant == layout)
+        variant.clear();
+    if (regionLocale.isEmpty() || regionLocale == "C")
+        regionLocale = selected->locale;
+    QSettings settings(CommonFunc::getSystemEnv(DI_CONFIG_FILE_ENV), QSettings::IniFormat);
+    settings.setValue("DI_LOCALE", selected->locale);
+    settings.setValue("DI_LAYOUT", layout);
+    settings.setValue("DI_LAYOUT_VARIANT", variant);
+    settings.setValue("DI_TIMEZONE", timezone);
+    settings.setValue("DI_LOCALTIME", timezone);
+    settings.setValue("DI_REGION_FORMAT_LOCALE", regionLocale);
+    settings.setValue("DI_REGION_FORMAT_LOCALE_SET", regionLocale + ".UTF-8");
+    settings.sync();
+    return settings.status() == QSettings::NoError;
 }
-
 
 void RegionFormatFrame::hideSearchableListViewDialog()
 {
@@ -637,8 +569,18 @@ void RegionFormatFrame::showEvent(QShowEvent *event)
 
 void RegionFormatFrame::onNextBtnClicked(bool checked)
 {
+    Q_UNUSED(checked);
     hideSearchableListViewDialog();
-    writeConf();
+    if (!CommonFunc::installWorkflow().canEditUser())
+        return;
+    if (!writeConf()) {
+        DDialog dialog(this);
+        dialog.setTitle(tr("Check your system settings"));
+        dialog.setMessage(tr("Select a language, keyboard layout, time zone and regional format before continuing."));
+        dialog.addButton(tr("Close"));
+        dialog.exec();
+        return;
+    }
     Q_EMIT next();
 }
 
@@ -669,7 +611,7 @@ void RegionFormatFrame::updateTs()
     m_locale = CommonFunc::getSettingsString("DI_LOCALE");
 
     m_title->setTitleLabelProperty(::QObject::tr("System settings"));
-    m_title->setTipsLabelProperty(::QObject::tr("Set the system language, keyboard layout, time zone and region"));
+    m_title->setTipsLabelProperty(tr("Set the language, keyboard layout, time zone and regional formats for the installed system"));
     m_nextBnt->setText(::QObject::tr("Next"));
 
     int rowCount = m_listWidget->count();

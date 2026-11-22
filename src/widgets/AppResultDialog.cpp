@@ -127,9 +127,9 @@ void AppResultDialog::loadAppResult()
     m_model->clear();
     QList<AppInfo> appInfos;
 #ifdef QT_DEBUG
-    QSettings settings("/etc/deepin-installer/app-info.ini", QSettings::IniFormat);
+    QSettings settings("/etc/fedora-dde-installer/app-info.ini", QSettings::IniFormat);
 #else
-    QSettings settings("/target/etc/deepin-installer/app-info.ini", QSettings::IniFormat);
+    QSettings settings("/target/etc/fedora-dde-installer/app-info.ini", QSettings::IniFormat);
 #endif
     auto groups = settings.childGroups();
     for (auto &group : groups) {

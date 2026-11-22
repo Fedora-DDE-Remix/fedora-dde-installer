@@ -7,7 +7,7 @@
 #include <time.h>
 
 // 时区数据文件
-const char kZoneTabFile[] = "/usr/share/zoneinfo/zone1970.tab";
+const char kZoneTabFile[] = "/usr/share/zoneinfo/zone.tab";
 const char kAntarctica[] = "Antarctica";
 
 double convertPos(const QString& pos, int digits)
@@ -90,23 +90,7 @@ void TimezoneManager::parseZoneFile()
             m_zoneInfoList << zoneInfo;
         }
     }
-    const SZoneInfo beijingZoneInfo = {"CN", "Asia/Beijing", convertPos("+3992", 2), convertPos("+11646", 3)};
-    m_zoneInfoList << beijingZoneInfo;
-    const SZoneInfo chengduZoneInfo = {"CN", "Asia/Chengdu", convertPos("+3067", 2), convertPos("+10406", 3)};
-    m_zoneInfoList << chengduZoneInfo;
-    const SZoneInfo chongqingZoneInfo = {"CN", "Asia/Chongqing", convertPos("+2959", 2), convertPos("+10654", 3)};
-    m_zoneInfoList << chongqingZoneInfo;
-    const SZoneInfo nanjingZoneInfo = {"CN", "Asia/Nanjing", convertPos("+3204", 2), convertPos("+11878", 3)};
-    m_zoneInfoList << nanjingZoneInfo;
-    const SZoneInfo wuhanZoneInfo = {"CN", "Asia/Wuhan", convertPos("+3052", 2), convertPos("+11431", 3)};
-    m_zoneInfoList << wuhanZoneInfo;
-    const SZoneInfo xianZoneInfo = {"CN", "Asia/Xian", convertPos("+3427", 2), convertPos("+10895", 3)};
-    m_zoneInfoList << xianZoneInfo;
-    const SZoneInfo urumqiZoneInfo = {"CN", "Asia/Urumqi", convertPos("+4377", 2), convertPos("+08768", 3)};
-    m_zoneInfoList << urumqiZoneInfo;
-    // 添加老挝万象时区信息
-    const SZoneInfo vientianeZoneInfo = {"LA", "Asia/Vientiane", convertPos("+1758", 2), convertPos("+10236", 3)};
-    m_zoneInfoList << vientianeZoneInfo;
+
 }
 
 int TimezoneManager::getZoneInfoIndexByTimezone(const ZoneInfoList& list, const QString& timezone)
@@ -134,7 +118,7 @@ QPair<QString, QString> TimezoneManager::getLocalTimezone(const QString& timezon
 
         // TODO: 调研是否需要保护环境变量
         localName =
-            dgettext("deepin-installer-timezones", timezone.toLocal8Bit().constData());
+            dgettext("fedora-dde-installer-timezones", timezone.toLocal8Bit().constData());
 
         if (!localBak.isEmpty()) {
             setlocale(LC_ALL, localBak.toLocal8Bit().constData());

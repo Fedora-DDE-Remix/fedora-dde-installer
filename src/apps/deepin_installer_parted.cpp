@@ -28,22 +28,19 @@ DCORE_USE_NAMESPACE
 int main(int argc, char* argv[]) {
     // init DApplication
     QCoreApplication app(argc, argv);
-    app.setApplicationName("deepin-installer-parted");
+    app.setApplicationName("fedora-dde-installer-parted");
 
     // init app
     DLogManager::registerConsoleAppender();
     PluginInterface *plu = PluginsManager::instance()->getPlugin(QString("%1/libDeepinInstallerPartition.so").arg(CommonFunc::getSystemEnv(DI_INSTALL_MODULE_DIR_ENV)));
-    if(plu && plu->load()) {
-        TaskPluginInterface *partTask = dynamic_cast<TaskPluginInterface*>(plu);
-        if (nullptr == partTask) {
-            qCritical() << "deepin-installer-parted is nullptr.";
-            return -1;
-        }
-
-        if (!partTask->start()) {
-            qCritical() << "deepin-installer-parted program execution failure.";
-            return -1;
-        }
+    if (!plu || !plu->load()) {
+        qCritical() << "The required partition module could not be loaded.";
+        return 1;
+    }
+    auto *partTask = dynamic_cast<TaskPluginInterface *>(plu);
+    if (!partTask || !partTask->start()) {
+        qCritical() << "The partition task failed.";
+        return 1;
     }
 
     return 0;

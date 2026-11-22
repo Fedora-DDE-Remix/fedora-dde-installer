@@ -79,16 +79,11 @@ private:
 
     void clearGhostSetting();
 
-    void GenerateRecoveryKey();
 
     CheckResult checkUImg(const QString &uimgFilePath);
 
-    bool isNoImmutableOptionAvailable() const;
-    void cacheInstallProfileDefaults();
-    void applyNoImmutableChoice();
 
 private slots:
-    void onStartRepairTool();
     QString parseHuaweiType(const QString &type);
 
 private:
@@ -105,12 +100,10 @@ private:
     DTipLabel *m_ghostTipLabel = Q_NULLPTR;
     DLabel *m_checkStatusImage = Q_NULLPTR;
     DSpinner *m_spinner = Q_NULLPTR;
-    DCheckBox *m_noImmutableCheckBox = Q_NULLPTR;
     DLabel *m_partLabel = Q_NULLPTR;
     SelectFileWidget *m_selectImgWidget = Q_NULLPTR;
     QStackedWidget *m_centerWidget = Q_NULLPTR;
     QMap<PartitionType, PartitionFrameBase*> m_mapPartition;
-    QMap<QString, QString> m_installProfileDefaults;
     CheckResult m_uimgCheckResult;
 };
 

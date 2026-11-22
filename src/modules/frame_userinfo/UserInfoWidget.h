@@ -24,7 +24,7 @@ public:
 
     void updateTs();
     void readConf();
-    void writeConf();
+    bool writeConf();
 
     // 当lineEdit处于编辑态时，隐藏错误提示tip。
     // 检查下一步按钮的状态，并报告给主窗口。

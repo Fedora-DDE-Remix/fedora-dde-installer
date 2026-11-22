@@ -1,7 +1,8 @@
 <RCC>
     <qresource prefix="/images">
-        <file>logo.svg</file>
-        <file>deepin.svg</file>
+        <file>fedora-dde-remix.png</file>
+
+
         <file>drive-harddisk-128px.svg</file>
         <file>close_normal.svg</file>
         <file>nextPicture.svg</file>
@@ -26,10 +27,7 @@
         <file>position.svg</file>
         <file>install_success.svg</file>
         <file>install_failed.svg</file>
-        <file>failed_qr.svg</file>
         <file>failed_data.svg</file>
-        <file>qr_code.svg</file>
-        <file>qr_code_deepin.svg</file>
         <file>interaction_warning.svg</file>
         <file>L.svg</file>
         <file>LV.svg</file>
@@ -46,8 +44,8 @@
         <file>resetTimezone.svg</file>
         <file>timezoneSet.svg</file>
         <file>select_white.svg</file>
-        <file>uos.svg</file>
-        <file>uos_e.svg</file>
+
+
         <file>config_progress.svg</file>
         <file>success.svg</file>
         <file>fail.svg</file>

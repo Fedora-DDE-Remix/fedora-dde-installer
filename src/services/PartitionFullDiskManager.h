@@ -41,18 +41,11 @@ public:
     void resetDisk();
     // 全盘lvm和全盘加密
     void addFullDiskLVM(const QString &fileSystem);
-    //保留用户数据
-    void saveUserData();
-    // 检查当前选择的磁盘是否符合保留用户数据的要求
-    KeepDataError checkSaveUserData(QString &oldVersion);
 
-    QString findDataPartitionByFsTab(const QStringList &partList);
 
-    bool checkPartitionInDevice(const QString &uuid, const SDeviceInfo &dev);
 
     bool isMultipleDiskToVg(const SDeviceInfo &devName, QMap<QString, QString> &text);
 
-    bool checkSaveUserDataOSVersionMatch(const QString &devPath, QString &oldVersion);
 
     qint64 defaultPartitionSize(const qint64 devSize, const qint64 total, const QString &size, const QString &label);
     SPartitionInfo getConfigToPartition(const QJsonValue &value);

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Install Fedora DDE Remix
+Name[zh_CN]=安装 Fedora DDE Remix
+Comment=Install Fedora DDE Remix and configure your account before restarting
+Comment[zh_CN]=安装 Fedora DDE Remix，并在重启前完成账户配置
+Exec=/usr/bin/fedora-dde-installer-launch
+Icon=fedora-dde-installer
+Terminal=false
+Categories=System;
+StartupNotify=true
+StartupWMClass=fedora-dde-installer

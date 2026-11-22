@@ -26,7 +26,8 @@ CustomPartitionFrame::CustomPartitionFrame(const QMap<SDeviceInfo, QList<SPartit
     m_tableView = new CustomPartationListView(this);
     m_tableView->setFixedWidth(CommonFunc::isBigScreen() ? 980 : 680);
     m_model = new DataModel;
-    m_model->setDatas(devs, vgs);
+    Q_UNUSED(vgs);
+    m_model->setDatas(devs, {});
     m_tableView->setModel(m_model);
     m_tableView->setColumnWidth(0, CommonFunc::isBigScreen() ? customPartationInstall::kColumnWidth_0 : customPartationInstall::kColumnWidthSmall_0);
     m_tableView->setColumnWidth(1, CommonFunc::isBigScreen() ? customPartationInstall::kColumnWidth_1 : customPartationInstall::kColumnWidthSmall_1);
@@ -175,7 +176,8 @@ CustomPartitionFrame::CustomPartitionFrame(const QMap<SDeviceInfo, QList<SPartit
 
 void CustomPartitionFrame::updateInstallInfo(const QMap<SDeviceInfo, QList<SPartitionInfo>> &devs, const QMap<SVGInfo, QList<SLVMInfo>> &vgs)
 {
-    m_model->setDatas(devs, vgs);
+    Q_UNUSED(vgs);
+    m_model->setDatas(devs, {});
 
     this->update();
 }

@@ -18,6 +18,8 @@
 #include <QResizeEvent>
 #include "PageIndicator.h"
 #include <QMouseEvent>
+#include <QFileInfo>
+#include <QPainter>
 
 MainWindow::MainWindow(QWidget *parent):QMainWindow (parent),
     m_framePartition(nullptr),
@@ -97,6 +99,7 @@ void MainWindow::initUI()
     main_layout->addLayout(bottomLayout);
     centerWidget->setLayout(main_layout);
     setCentralWidget(centerWidget);
+    updateTs();
 }
 
 void MainWindow::setPluginSize()
@@ -134,16 +137,37 @@ void MainWindow::showPlugins(const QStack<SPluginInfo> &plugs)
     this->plugins(nextLists);  // 加载主流程插件
 }
 
-void MainWindow::loadPlugins(const QString &pluginType)
+bool MainWindow::loadPlugins(const QString &pluginType)
 {
+    if (m_pluginsLoaded)
+        return true;
     auto plugins = CommonFunc::getPlugins(pluginType);
+    const QStringList required = {
+        "libDeepinInstallerLanguage.so", "libDeepinInstallerPartitionFrame.so",
+        "libDeepinInstallerPrepareFrame.so", "libDeepinInstallerProgressFrame.so",
+        "libDeepinInstallerUserInfoFrame.so", "libDeepinInstallerRegionFormatFrame.so",
+        "libDeepinConfigProgressFrame.so"
+    };
+    auto ordered = plugins;
+    for (const QString &filename : required) {
+        if (ordered.isEmpty() || QFileInfo(ordered.pop().path).fileName() != filename) {
+            qCritical() << "The installation workflow is incomplete or out of order";
+            return false;
+        }
+    }
+    if (!ordered.isEmpty())
+        return false;
     int totalSize = 0;
     //load plugins
     while (!plugins.isEmpty()) {
         qDebug() << "load plugin:" << plugins.top().path;
         PluginInterface *plu = PluginsManager::instance()->getPlugin(plugins.pop().path);
         FramePluginInterface* frame = dynamic_cast<FramePluginInterface*>(plu);
-        if (frame && frame->load()) {
+        if (!frame || !frame->load()) {
+            qCritical() << "A required installation page could not be loaded";
+            return false;
+        }
+        {
             totalSize++;
             if(frame->frameName() == gFramePartition) {
                 m_framePartition = frame;
@@ -164,6 +188,8 @@ void MainWindow::loadPlugins(const QString &pluginType)
 
     m_pageWidgets->setPageCount(totalSize);
     m_pageWidgets->setCurrentPage(0);
+    m_pluginsLoaded = true;
+    return true;
 }
 
 void MainWindow::changeEvent(QEvent *event)
@@ -182,45 +208,51 @@ void MainWindow::resizeEvent(QResizeEvent *event)
 
 void MainWindow::initTranslator(const QString &locale)
 {
-    QString tsFile = QString("%1/deepin-installer-%2.qm").arg(DI_I18N_DIR_ENV).arg(locale);
+    QString tsFile = QString("%1/fedora-dde-installer-%2.qm").arg(DI_I18N_DIR_ENV).arg(locale);
     qInfo() << "set translator to:" << tsFile;
     m_translator->load(tsFile);
 }
 
 void MainWindow::initPluginConnection(FramePluginInterface *frame, QStackedWidget *pluginWidget)
 {
-    connect(frame, &FramePluginInterface::next, [=]{
-        int index = pluginWidget->currentIndex();
-        auto *currFrame = qobject_cast<FramePluginInterface*>(pluginWidget->currentWidget());
-        if(currFrame->frameName() == gFramePartition &&
-            CommonFunc::isGhost() &&
-            m_framePrepare != nullptr) {
-            pluginWidget->setCurrentWidget(m_framePrepare);
-        } else if (currFrame->frameName() == gFramePartition &&
-                   CommonFunc::getSettingsString("DI_PARTITION_TYPE") == QString::number(SaveData) &&
-                   m_frameApplication != nullptr) {
-            pluginWidget->setCurrentIndex(index + 2);
-        } else {
-            pluginWidget->setCurrentIndex(index + 1);
+    connect(frame, &FramePluginInterface::next, this, [this, frame, pluginWidget] {
+        if (pluginWidget->currentWidget() != frame)
+            return;
+        if (frame->frameName() == gFrameInstall
+                && !CommonFunc::installWorkflow().canEditUser())
+            return;
+        const int nextIndex = pluginWidget->currentIndex() + 1;
+        if (nextIndex >= pluginWidget->count())
+            return;
+        auto *nextFrame = qobject_cast<FramePluginInterface *>(pluginWidget->widget(nextIndex));
+        if (!CommonFunc::installWorkflow().canChangePartitions() && nextFrame) {
+            nextFrame->hideCloseButton();
+            if (nextFrame->frameName() == gFrameUserInfo)
+                nextFrame->hideBackButton();
         }
+        pluginWidget->setCurrentIndex(nextIndex);
     });
 
-    connect(frame, &FramePluginInterface::back, [=]{
-        int index = pluginWidget->currentIndex();
-        auto *currFrame = qobject_cast<FramePluginInterface*>(pluginWidget->currentWidget());
-        if(currFrame->frameName() == gFramePrepare &&
-            CommonFunc::isGhost() &&
-            m_framePartition != nullptr) {
-            pluginWidget->setCurrentWidget(m_framePartition);
-        } else if (currFrame->frameName() == gFrameUserInfo &&
-                   CommonFunc::getSettingsString("DI_PARTITION_TYPE") == QString::number(SaveData) &&
-                   m_frameApplication != nullptr) {
-            pluginWidget->setCurrentIndex(index - 2);
-        } else {
-            pluginWidget->setCurrentIndex(index - 1);
+    connect(frame, &FramePluginInterface::back, this, [frame, pluginWidget] {
+        if (pluginWidget->currentWidget() != frame)
+            return;
+        const int previousIndex = pluginWidget->currentIndex() - 1;
+        if (previousIndex < 0)
+            return;
+        if (!CommonFunc::installWorkflow().canChangePartitions()) {
+            if (!CommonFunc::installWorkflow().canEditUser())
+                return;
+            int installIndex = -1;
+            for (int i = 0; i < pluginWidget->count(); ++i) {
+                auto *candidate = qobject_cast<FramePluginInterface *>(pluginWidget->widget(i));
+                if (candidate && candidate->frameName() == gFrameInstall)
+                    installIndex = i;
+            }
+            // Never return to a destructive step after the target is installed.
+            if (installIndex < 0 || previousIndex <= installIndex)
+                return;
         }
-
-        qInfo() << "current Index:" << pluginWidget->currentIndex();
+        pluginWidget->setCurrentIndex(previousIndex);
     });
 
     connect(frame, &FramePluginInterface::onChangeLanguage, this, &MainWindow::initTranslator);
@@ -311,8 +343,7 @@ void MainWindow::debugShell()
 
 void MainWindow::updateTs()
 {
-    // 试用模式时不显示这段标题
-    if (qApp->applicationName() != "deepin-installer-live-config")
-        m_titleLabel->setText(QString(::QObject::tr("Welcome to install %1")).arg(CommonFunc::isNameDeepin()));
+    const QString title = tr("Fedora DDE Remix Installer");
+    m_titleLabel->setText(title);
+    setWindowTitle(title);
 }
-

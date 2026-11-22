@@ -136,6 +136,7 @@ SelectLanguageFrame::SelectLanguageFrame(QWidget *parent) :FramePluginInterface 
 
     m_licenseWidget = new QFrame;
     m_licenseWidget->setLayout(acceptLicenseLayout);
+    m_licenseWidget->hide();
 
     QVBoxLayout *userLayout = new QVBoxLayout;
     userLayout->addWidget(m_experienceWidget, 0, Qt::AlignLeft);
@@ -164,7 +165,7 @@ SelectLanguageFrame::SelectLanguageFrame(QWidget *parent) :FramePluginInterface 
     hVerlayout->setContentsMargins(0, 0, 0, 0);
     rightHolder->setLayout(hVerlayout);
     m_versionLabel = new DLabel;
-    m_versionLabel->setText("Deepin-Installer V " + CommonFunc::getVersion());
+    m_versionLabel->setText("Fedora DDE Remix Installer " + CommonFunc::getVersion());
     m_versionLabel->adjustSize();
     m_versionLabel->setStyleSheet("font-size:12px; color: black; font-weight: lighter;");
     m_versionLabel->setAlignment(Qt::AlignmentFlag::AlignCenter);
@@ -197,7 +198,7 @@ SelectLanguageFrame::SelectLanguageFrame(QWidget *parent) :FramePluginInterface 
 
     connect(m_nextBnt, &QPushButton::clicked, this, [=] {
         bool canNext = true;
-        if (qApp->applicationName() != "deepin-installer-live-config") {
+        if (qApp->applicationName() != "fedora-dde-installer-live-config") {
             canNext = checkDiskSpace();
         }
         if (canNext) {
@@ -310,16 +311,12 @@ void SelectLanguageFrame::onBackButton()
 
 bool SelectLanguageFrame::isShowExperienceWidget()
 {
-    return CommonFunc::getSettingsBool("DI_USER_EXPERIENCE_LOAD");
+    return false;
 }
 
 QString SelectLanguageFrame::userExperienceTitle()
 {
-    QString osType = CommonFunc::getCurrentOsType();
-    if (osType == "Desktop") {
-        return ::QObject::tr("Deepin OS User Experience Program License Agreement");
-    }
-    return ::QObject::tr("UOS User Experience Program License Agreement");
+    return QString();
 }
 
 QString SelectLanguageFrame::getLicenseText(LicenseType licenseType)
@@ -330,7 +327,7 @@ QString SelectLanguageFrame::getLicenseText(LicenseType licenseType)
     QString editionName = CommonFunc::getSettingsString("DI_EDITION_NAME");
     QString osType = editionName.isEmpty() ? CommonFunc::getCurrentOsType() : editionName;
     QString osTypeString = "";
-    auto config = DConfig::create("com.deepin.system.mil.dconfig", "com.deepin.system.mil.dconfig");
+    auto config = DConfig::create("org.fedoradde.installer", "org.fedoradde.installer");
     switch (licenseType) {
     case LicenseType::privacyPolicy:
         licenseDir += "privacy-policy/";
@@ -348,7 +345,7 @@ QString SelectLanguageFrame::getLicenseText(LicenseType licenseType)
     case LicenseType::endUserLicenseAgreement:
         licenseDir += "enduser-agreement/";
         if (config != nullptr && config->isValid()) {
-            qInfo() << "read config file com.deepin.system.mil.dconfig success";
+            qInfo() << "read config file org.fedoradde.installer success";
             if (config->keyList().contains("Use_mil")) {
                 int military = config->value("Use_mil").toInt();
                 //1:军用版  0：非军用版
@@ -413,6 +410,8 @@ bool SelectLanguageFrame::checkDiskSpace()
     bool isValidFullDisk = false;
     bool isValidDisk = false;
     for (SDeviceInfo dev : deviceInfos.keys()) {
+        if (dev.isStartDevice || dev.isVentoyDevice)
+            continue;
         if (dev.size >= CommonFunc::gToM(deviceMinSize)) {
             isValidFullDisk = true;
             isValidDisk = true;
@@ -436,11 +435,6 @@ bool SelectLanguageFrame::checkDiskSpace()
             dialog.setCloseButtonVisible(true);
             connect(&dialog, &DDialog::buttonClicked, this, [&](int index, const QString &text) {
                 if (index == 0) {
-#ifdef QT_NO_DEBUG
-                    CommonFunc::shutdownSystem();
-#else
-                    QCoreApplication::exit();
-#endif
                     isValidOk = false;
                 }
             });
@@ -460,11 +454,6 @@ bool SelectLanguageFrame::checkDiskSpace()
             dialog.addButton(::QObject::tr("Cancel", "Button"), false);
             dialog.setCloseButtonVisible(true);
             connect(&dialog, &DDialog::buttonClicked, this, [&](int index, const QString &text) {
-#ifdef QT_NO_DEBUG
-                CommonFunc::shutdownSystem();
-#else
-                QCoreApplication::exit();
-#endif
                 isValidOk = false;
             });
             connect(&dialog, &DDialog::closed, this, [&]() {

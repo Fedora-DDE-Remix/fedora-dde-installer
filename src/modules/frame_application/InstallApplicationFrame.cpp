@@ -80,7 +80,7 @@ void InstallApplicationFrame::initConnection()
     });
 
     connect(m_nextBnt, &QPushButton::clicked, [=] () {
-        QSettings settings("/etc/deepin-installer/app-info.ini", QSettings::IniFormat);
+        QSettings settings("/etc/fedora-dde-installer/app-info.ini", QSettings::IniFormat);
         settings.clear();
         int count = 0;
         for (int i = 0; i < m_appStack->count(); i++) {

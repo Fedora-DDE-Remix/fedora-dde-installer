@@ -161,7 +161,7 @@ void EditPartitionDialog::updateErrTips(const QString &err)
 
 QStringList EditPartitionDialog::getFileSystemList()
 {
-    QStringList list = CommonFunc::getSettingsStringList("DI_PARTITION_FILESYSTEM_CONFIG");
+    QStringList list = {"ext4", "xfs", "btrfs", "linux-swap"};
     if (CommonFunc::isUEFI() && !list.contains("vfat"))  {
         if(canUseEFI(m_editPartitionInfo)) {
             list.append("vfat");

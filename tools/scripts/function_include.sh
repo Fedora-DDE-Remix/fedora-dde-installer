@@ -1,9 +1,3 @@
 #!/bin/bash
-
-#include functions
-for _FILE in $DI_INSTALL_TOOLS_DIR_ENV/functions/*.sh;do
-    if [ -e "${_FILE}" ];then
-         . "${_FILE}"
-    fi
-done
-
+source /usr/share/fedora-dde-installer/tools/functions/logs_funcs.sh
+source /usr/share/fedora-dde-installer/tools/functions/default_funcs.sh

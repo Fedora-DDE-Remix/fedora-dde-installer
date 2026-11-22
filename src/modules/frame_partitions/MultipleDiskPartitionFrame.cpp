@@ -10,6 +10,7 @@
 #include "DeviceManager.h"
 #include "PartitionOperateManager.h"
 #include "PartitionFullDiskManager.h"
+#include "PartitionSeniorManager.h"
 #include "MultipleDiskItem.h"
 #include "DeviceListView.h"
 #include "FormatDiskTipsDialog.h"
@@ -97,7 +98,7 @@ void MultipleDiskPartitionFrame::initDeviceInfo(const QList<SDeviceInfo> &infos)
     m_dataDevCombo->clear();
     m_dataDevCombo->addItem(tr("Unselect"));
     //m_dataDevCombo->setEnabled(false);
-    m_btnKeepData->setVisible(!CommonFunc::isGhost() && CommonFunc::getSettingsBool("DI_SAVE_USER_DATA_LOAD"));
+    m_btnKeepData->hide();
     if(m_modeGroup->checkedId() != -1) {
         int id = m_modeGroup->checkedId();
         m_modeGroup->setExclusive(false);
@@ -158,176 +159,22 @@ void MultipleDiskPartitionFrame::initDeviceInfo(const QList<SDeviceInfo> &infos)
 
 void MultipleDiskPartitionFrame::initConnection()
 {
-    connect(m_dataDevCombo, QOverload<int>::of(&DComboBox::currentIndexChanged), [=](int index){
-        QString err;
-        PartitionFullDiskManager::instance()->delHomeDev(err);
-        if(index > 0 && index != (m_sysDevView->currentIndex().row() + 1)) {
-            PartitionFullDiskManager::instance()->addHomeDisk(m_devs[index - 1], err);
-        }
-    });
-
-    auto *selectModel = m_sysDevView->selectionModel();
-    connect(selectModel, &QItemSelectionModel::currentChanged, this, &MultipleDiskPartitionFrame::handleSystemDiskChange);
-    //some connection
-#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
-    connect(m_modeGroup, QOverload<int, bool>::of(&QButtonGroup::idToggled), [=](int id, bool checked){
-#else
-    connect(m_modeGroup, QOverload<int, bool>::of(&QButtonGroup::buttonToggled), [=](int id, bool checked){
-#endif
-        if(!checked) {
-            return;
-        }
-
-        switch (id) {
-        case 1:
-            m_modeTip_1->setVisible(true);
-            m_modeTip_2->setVisible(false);
-            m_modeTip_3->setVisible(false);
-            m_modeTip_4->setVisible(false);
-            m_modeTip_5->setVisible(false);
-            break;
-        case 2:
-        {
-            m_modeTip_1->setVisible(false);
-            m_modeTip_2->setVisible(true);
-            m_modeTip_3->setVisible(false);
-            m_modeTip_4->setVisible(false);
-            m_modeTip_5->setVisible(false);
-            PasswdDialog *dialog = new PasswdDialog(this);
-            dialog->setAutoDecryptVisible(CommonFunc::isTPM());
-            if (dialog->exec() == DDialog::Accepted) {
-                m_fullEncryptionPwd = dialog->getPasswd();
-                m_autoDecrypt = dialog->autoDecryptIsChecked();
-                QTimer::singleShot(1, m_nextBtn, &QAbstractButton::click);
-            } else {
-                m_modeGroup->button(1)->setChecked(true);
-            }
-            setFocus();
-        }
-            break;
-        case 3:
-            m_modeTip_1->setVisible(false);
-            m_modeTip_2->setVisible(false);
-            m_modeTip_3->setVisible(true);
-            m_modeTip_4->setVisible(false);
-            m_modeTip_5->setVisible(false);
-            break;
-        case 4:
-        {
-            bool decryptStatus = false;
-            bool needDecrypt = this->checkDiskNeedDecrypt(decryptStatus);
-            if(needDecrypt && !decryptStatus) {
-                m_modeGroup->button(1)->setChecked(true);
-                return;
-            }
-
-            if(needDecrypt) {
-                m_modeTip_1->setVisible(false);
-                m_modeTip_2->setVisible(false);
-                m_modeTip_3->setVisible(false);
-                m_modeTip_4->setVisible(false);
-                m_modeTip_5->setVisible(true);
-            } else {
-                m_modeTip_1->setVisible(false);
-                m_modeTip_2->setVisible(false);
-                m_modeTip_3->setVisible(false);
-                m_modeTip_4->setVisible(true);
-                m_modeTip_5->setVisible(false);
-            }
-        }
-            break;
-        default:
-            break;
-        }
-
-        updateSystemDiskStatus();
-
-        m_contentWidget->adjustSize();
-    });
+    connect(m_sysDevView->selectionModel(), &QItemSelectionModel::currentChanged,
+            this, &MultipleDiskPartitionFrame::handleSystemDiskChange);
 }
 
 bool MultipleDiskPartitionFrame::checkDiskIsOK()
 {
-    bool bOK = true;
-    m_tipLabel->setText("");
-    auto sysIndex = m_sysDevView->currentIndex();
-    int dataIndex = m_dataDevCombo->currentIndex();
-    do
-    {
-        if(!sysIndex.isValid()) {
-            //m_tipLabel->setText(tr("please select a disk first"));
-            bOK = false;
-            break;
-        }
-
-        //user select a data disk
-        if(dataIndex > 0 && (sysIndex.row() + 1) != dataIndex) {
-            // 双盘系统盘大小是49G，数据盘大小是最小15G
-            //sys disk and data disk not the same
-            qint64 systemMinSize = CommonFunc::getSettingsInt("DI_DEVICE_MIN_SIZE_CONFIG") * giDeviceUnitSize - CommonFunc::getSettingsInt("DI_PERSISTENT_SIZE_CONFIG");
-            qint64 dataMinSize = CommonFunc::getSettingsInt("DI_PERSISTENT_SIZE_CONFIG");
-            
-            if(m_devs.at(sysIndex.row()).size < systemMinSize) {
-                DDialog dialog;
-                dialog.setWindowFlags(Qt::WindowTitleHint);
-                dialog.setTitle(::QObject::tr("Insufficient disk space"));
-                dialog.setMessage(QString(::QObject::tr("To install this operating system, the system partition requires at least %1 of disk space").arg(QString("%1GiB").arg(CommonFunc::mToG(systemMinSize)))));
-                dialog.setWordWrapMessage(true);
-                dialog.addButton(::QObject::tr("Cancel"), false);
-                dialog.setCloseButtonVisible(true);
-                dialog.move(qApp->primaryScreen()->availableSize().width() / 2 - dialog.width() / 2,
-                            qApp->primaryScreen()->availableSize().height() / 2 - dialog.height() / 2);
-                dialog.exec();
-                bOK = false;
-                break;
-            } else if (m_devs.at(dataIndex - 1).size < dataMinSize) {
-                DDialog dialog;
-                dialog.setWindowFlags(Qt::WindowTitleHint);
-                dialog.setTitle(::QObject::tr("Insufficient disk space"));
-                dialog.setMessage(QString(::QObject::tr("To install this operating system, the data partition requires at least %1 of disk space").arg(QString("%1GiB").arg(CommonFunc::mToG(dataMinSize))))) ;
-                dialog.setWordWrapMessage(true);
-                dialog.addButton(::QObject::tr("Cancel"), false);
-                dialog.setCloseButtonVisible(true);
-                dialog.move(qApp->primaryScreen()->availableSize().width() / 2 - dialog.width() / 2,
-                            qApp->primaryScreen()->availableSize().height() / 2 - dialog.height() / 2);
-                dialog.exec();
-                bOK = false;
-                break;
-            }
-        } else {
-            qint64 validDeviceMinSize = CommonFunc::getSettingsInt("DI_DEVICE_MIN_SIZE_CONFIG") * giDeviceUnitSize;
-            if (m_devs.at(sysIndex.row()).size < validDeviceMinSize) {
-                DDialog dialog;
-                dialog.setWindowFlags(Qt::WindowTitleHint);
-                dialog.setTitle(::QObject::tr("Insufficient disk space"));
-                dialog.setMessage(::QObject::tr("At least %1 of disk space is required to install this operating system").arg(QString("%1GiB").arg(CommonFunc::mToG(validDeviceMinSize))));
-                dialog.setWordWrapMessage(true);
-                dialog.addButton(::QObject::tr("Cancel"), false);
-                dialog.setCloseButtonVisible(true);
-                dialog.move(qApp->primaryScreen()->availableSize().width() / 2 - dialog.width() / 2,
-                            qApp->primaryScreen()->availableSize().height() / 2 - dialog.height() / 2);
-                dialog.exec();
-                bOK = false;
-                break;
-            }
-        }
-    }while (false);
-
-    if(sysIndex.isValid()) {
-        if (bOK) {
-            auto device = m_devs.at(sysIndex.row());
-            auto efiSize = CommonFunc::isUEFI() ? PartitionFullDiskManager::instance()->getConfigPartitionSize(device.size, gEFILabel) : 0;
-            auto bootSize = PartitionFullDiskManager::instance()->getConfigPartitionSize(device.size, gBootLabel);
-            auto rootSize = PartitionFullDiskManager::instance()->getConfigPartitionSize(device.size, gRootaLabel);
-            auto swapSize = PartitionFullDiskManager::instance()->getConfigPartitionSize(device.size, gSWAPLabel);
-            qint64 deviceMinSize = efiSize + bootSize + rootSize + swapSize;
-            //大于2G调整才有意义
-            sysIndex.data(Qt::UserRole + 4).value<QWidget*>()->setEnabled(device.size - deviceMinSize > 2 * 1024);
-        }
-
+    m_tipLabel->clear();
+    const auto index = m_sysDevView->currentIndex();
+    if (!index.isValid())
+        return false;
+    const qint64 minimum = CommonFunc::getSettingsInt("DI_DEVICE_MIN_SIZE_CONFIG") * giDeviceUnitSize;
+    if (m_devs.at(index.row()).size < minimum) {
+        m_tipLabel->setText(tr("At least %1 GiB of disk space is required.").arg(CommonFunc::mToG(minimum)));
+        return false;
     }
-
-    return bOK;
+    return true;
 }
 
 bool MultipleDiskPartitionFrame::checkDiskNeedDecrypt(bool &decryptStatus)
@@ -384,7 +231,7 @@ void MultipleDiskPartitionFrame::adjustSystemSize(qint64 sysSize, bool bEnable)
     item->setData((int)CommonFunc::mToG(sysSize), Qt::UserRole + 2);
     item->data(Qt::UserRole + 4).value<QWidget*>()->setEnabled(bEnable);
     m_sysDevView->update(item->index());
-    PartitionFullDiskManager::instance()->resizeSystemPartition(sysSize - m_sysMinSize);
+
 }
 
 void MultipleDiskPartitionFrame::updateListState()
@@ -554,142 +401,49 @@ void MultipleDiskPartitionFrame::onEditSize()
 
 void MultipleDiskPartitionFrame::onNextButtonClicked()
 {
+    if (!checkDiskIsOK())
+        return;
+    QString error;
+    auto device = m_devs.at(m_sysDevView->currentIndex().row());
+    device.isCrypt = false;
+    device.isCreateCryptHeader = false;
+    CommonFunc::setSettingsValue("DI_CRYPT_PASSWORD", "");
     CommonFunc::setSettingsValue("DI_OLD_USERNAME_LIST", "");
-    if (!checkDiskIsOK()) {
+    PartitionFullDiskManager::instance()->setPartitionMode(FullDiskMode);
+    PartitionFullDiskManager::instance()->delHomeDev();
+    PartitionFullDiskManager::instance()->resetDisk();
+    if (!PartitionFullDiskManager::instance()->addSystemDisk(device, error)
+            || !PartitionSeniorManager::instance()->checkPartition(error)) {
+        m_tipLabel->setText(error);
         return;
     }
-
-    QString err;
-    //检查保留用户数据
-    int checkId = m_modeGroup->checkedId();
-    PartitionFullDiskManager::instance()->setPartitionMode(FullDiskMode);
-    PartitionFullDiskManager::instance()->resetDisk();
-    auto sysDev = PartitionFullDiskManager::instance()->getSystemDev();
-    auto homeDev = PartitionFullDiskManager::instance()->getHomeDev();
-    sysDev.isCrypt = m_btnEncrypt->isChecked();
-    homeDev.isCrypt = m_btnEncrypt->isChecked();
-    if(sysDev == homeDev) {
-        //system disk an data disk is the same
-        PartitionFullDiskManager::instance()->delHomeDev();
-        PartitionFullDiskManager::instance()->addSystemDisk(sysDev, err);
-    } else {
-        PartitionFullDiskManager::instance()->addSystemDisk(sysDev, err);
-        PartitionFullDiskManager::instance()->addHomeDisk(homeDev, err);
-    }
-
-    if (checkId == 4) {
-        QString oldVersion;
-        auto errType = PartitionFullDiskManager::instance()->checkSaveUserData(oldVersion);
-        if (errType != KeepDataError::NO_ERROR) {
-            UserDataDialog userDlg(errType, oldVersion);
-            userDlg.exec();
-
-            // 设置默认安装模式
-            m_modeGroup->button(1)->setChecked(true);
-            checkId = m_modeGroup->checkedId();
-
-            if (userDlg.getBtnSelectState() != BtnSelectState::confirm) {
-                return;
-            }
-        }
-    }
-
-    if(CommonFunc::isGhost()) {
-        if(!PartitionFullDiskManager::instance()->checkGhostModeSpace(err)) {
-            m_tipLabel->setText(err);
-            return;
-        }
-
-        QString ghostDevPath = CommonFunc::getSettingsString("DI_UIMG_DEVICE");
-        auto ghostSysDev = PartitionFullDiskManager::instance()->getSystemDev();
-        auto ghosthomeDev = PartitionFullDiskManager::instance()->getHomeDev();
-        if(!ghostDevPath.isEmpty() && (ghostDevPath.startsWith(ghostSysDev.device) ||
-            (!ghosthomeDev.device.isEmpty() && ghostDevPath.startsWith(ghosthomeDev.device)))) {
-            m_tipLabel->setText(tr("Cannot select the disk contains the image."));
-            return;
-        }
-    }
-
-    if(checkId == 4) {
-        //Keep user data
-        PartitionFullDiskManager::instance()->setPartitionMode(SaveData);
-        PartitionFullDiskManager::instance()->saveUserData();
-    } else if (checkId == 2) {
-        //写加密密码到配置文件
-        CommonFunc::setSettingsValue("DI_CRYPT_PASSWORD", m_fullEncryptionPwd);
-        CommonFunc::setSettingsValue("DI_IS_AUTO_DECRYPT", m_autoDecrypt);
-        PartitionFullDiskManager::instance()->setPartitionMode(Cryptsetup);
-        PartitionFullDiskManager::instance()->addFullDiskLVM(gCryptoLuksFileSystem);
-    } else if (checkId == 3) {
-        //写使用lvm逻辑分区标志字段
-        PartitionFullDiskManager::instance()->setPartitionMode(LvmFullDisk);
-        PartitionFullDiskManager::instance()->addFullDiskLVM(gLVM2PVFileSystem);
-    }
-
     Q_EMIT next();
 }
 
 void MultipleDiskPartitionFrame::handleSystemDiskChange(const QModelIndex &current, const QModelIndex &previous)
 {
-    if(!previous.isValid() && current.isValid()) {
+    if (!current.isValid())
+        return;
+    if (!previous.isValid())
         m_sysDevView->selectionModel()->select(current, QItemSelectionModel::SelectCurrent);
-    }
-
-    if(m_modeGroup->checkedId() == -1) {
-        m_modeGroup->button(1)->setEnabled(true);
-        m_modeGroup->button(2)->setEnabled(true);
-        m_modeGroup->button(3)->setEnabled(true);
-        m_modeGroup->button(4)->setEnabled(true);
-        m_modeGroup->button(1)->setChecked(true);
-    }
-
-    //如果系统盘和数据盘不一致，则添加数据盘
-    if((m_dataDevCombo->currentIndex() > 0) && (current.row() != (m_dataDevCombo->currentIndex() - 1))) {
-        QString err;
-        if (!PartitionFullDiskManager::instance()->addHomeDisk(m_devs[m_dataDevCombo->currentIndex() - 1], err)) {
-            qWarning() << "add home disk failed: " << err;
-        }
-    }
-
-    QString err;
-    const SDeviceInfo &sysDev = m_devs.at(current.row());
+    m_modeGroup->button(1)->setEnabled(true);
+    m_modeGroup->button(1)->setChecked(true);
+    QString error;
+    PartitionFullDiskManager::instance()->delHomeDev();
     PartitionFullDiskManager::instance()->delSystemDev();
-    PartitionFullDiskManager::instance()->addSystemDisk(sysDev, err);
+    if (!PartitionFullDiskManager::instance()->addSystemDisk(m_devs.at(current.row()), error))
+        m_tipLabel->setText(error);
     updateSystemDiskStatus();
 }
 
 void MultipleDiskPartitionFrame::updateSystemDiskStatus()
 {
-    auto index = m_sysDevView->currentIndex();
-    if (!index.isValid()) {
+    const auto index = m_sysDevView->currentIndex();
+    if (!index.isValid())
         return;
-    }
-    qint64 totalSize = m_devs.at(index.row()).size;
-
-    int sysShowMinSize = m_sysMinSize;
-
-    //大于225G的磁盘取值为磁盘容量的10%
-    if (totalSize > gDiskThreshold) {
-        sysShowMinSize = qFloor(totalSize * 0.1);
-    }
-
-    // 如果选择的是保留用户数据模式，则获取之前roota的大小，用于在界面显示
-    if (m_modeGroup->checkedId() == 4) {
-        auto devInfos = PartitionOperateManager::instance()->getAvailableDeviceInfo();
-        for (SDeviceInfo dev : devInfos.keys()) {
-            if (dev.device != m_devs.at(index.row()).device) {
-                continue;
-            }
-            for (SPartitionInfo in : devInfos.value(dev)) {
-                if (in.label == "Roota") {
-                    sysShowMinSize = in.size;
-                    break;
-                }
-            }
-        }
-    }
-
-    adjustSystemSize(sysShowMinSize, m_modeGroup->checkedId() != 4);
+    const qint64 total = m_devs.at(index.row()).size;
+    const qint64 bootAndSwap = PartitionFullDiskManager::instance()->getOtherPartitionSize(total);
+    adjustSystemSize(qMax<qint64>(0, total - bootAndSwap), false);
 }
 
 void MultipleDiskPartitionFrame::initContent()
@@ -724,6 +478,7 @@ void MultipleDiskPartitionFrame::initContent()
     //data disk
     DFrame *dataFrame = new DFrame;
     dataFrame->setFixedSize(CENTER_WIDTH, 60);
+    dataFrame->hide();
     dataFrame->setLineWidth(0);
     dataFrame->setBackgroundRole(DPalette::ItemBackground);
     QHBoxLayout *dataLayout = new QHBoxLayout;
@@ -740,6 +495,8 @@ void MultipleDiskPartitionFrame::initContent()
     m_labelMode->setIndent(10);
     DFrame *modeFrame = new DFrame;
     modeFrame->setFixedWidth(CENTER_WIDTH);
+    modeFrame->hide();
+    m_labelMode->hide();
     modeFrame->setMinimumHeight(60);
     modeFrame->setLineWidth(0);
     modeFrame->setBackgroundRole(DPalette::ItemBackground);
@@ -749,8 +506,14 @@ void MultipleDiskPartitionFrame::initContent()
     modeFrame->setLayout(modeLayout);
     m_btnDefault = new HelpRadioButton;
     m_btnEncrypt = new HelpRadioButton;
+    m_btnEncrypt->hide();
+    m_btnEncrypt->setEnabled(false);
     m_btnExtand = new HelpRadioButton;
+    m_btnExtand->hide();
+    m_btnExtand->setEnabled(false);
     m_btnKeepData = new HelpRadioButton;
+    m_btnKeepData->hide();
+    m_btnKeepData->setEnabled(false);
     m_btnDefault->setEnabled(false);
     m_btnEncrypt->setEnabled(false);
     m_btnExtand->setEnabled(false);
@@ -775,7 +538,7 @@ void MultipleDiskPartitionFrame::initContent()
     m_modeTip_1->setMinimumHeight(40);
     m_modeTip_1->setIndent(10);
     m_modeTip_1->setWordWrap(true);
-    m_modeTip_1->setVisible(false);
+    m_modeTip_1->setVisible(true);
 
     m_modeTip_2 = new DTipLabel;
     m_modeTip_2->setAlignment(Qt::AlignLeft);
@@ -840,28 +603,7 @@ void MultipleDiskPartitionFrame::initContent()
 
 void MultipleDiskPartitionFrame::setControlEnable()
 {
-    SDeviceInfo system = PartitionFullDiskManager::instance()->getSystemDev();
-    SDeviceInfo home = PartitionFullDiskManager::instance()->getHomeDev();
-
-
-    m_nextBtn->setEnabled(false);
-
-    if (!system.device.isEmpty()) {
-
-        m_nextBtn->setEnabled(true);
-
-//        if (m_keepUserData->isChecked()) {
-//            m_keepUserData->setChecked(PartitionFullDiskManager::instance()->checkSaveUserData());
-//        } else {
-//            if (data.device.isEmpty()) {
-//                m_editbtn->setEnabled(true);
-//            }
-        }
-//    } else {
-//        m_fullEncryption->setChecked(false);
-//        m_useLvmLogical->setChecked(false);
-//        m_keepUserData->setChecked(false);
-//    }
+    m_nextBtn->setEnabled(!PartitionFullDiskManager::instance()->getSystemDev().device.isEmpty());
 }
 
 bool MultipleDiskPartitionFrame::updateDiskInfo(const SDeviceInfo &info)
@@ -942,7 +684,7 @@ void MultipleDiskPartitionFrame::updateTs()
         m_btnExtand->setText(CommonFunc::wrapWords(tr("Enable Volume Extension"), m_btnExtand->width() - m_btnExtand->iconSize().width() - spacinValue, m_btnExtand->fontMetrics()));
         m_btnKeepData->setText(CommonFunc::wrapWords(tr("keep user data"), m_btnKeepData->width() - m_btnKeepData->iconSize().width() - spacinValue, m_btnKeepData->fontMetrics()));
 
-        m_modeTip_1->setText(::QObject::tr("Automatic partition to install %1, it will format the selected disk, please backup your data.").arg(CommonFunc::getCurrentOs() == OSType::Community ? "deepin" : "UOS"));
+        m_modeTip_1->setText(tr("Creates a boot partition, swap, and a writable root filesystem on the selected disk. All data on that disk will be erased."));
         m_modeTip_1->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
         m_modeTip_1->adjustSize();
         m_modeTip_2->setText(::QObject::tr("Encrypt the whole disk to prevent data theft."));        
@@ -953,7 +695,7 @@ void MultipleDiskPartitionFrame::updateTs()
         m_modeTip_3->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
         m_modeTip_3->adjustSize();
         m_modeTip_4->setText(::QObject::tr("If you have previously installed %1 using the same boot mode "
-                                           "as this installation configuration, then you can keep your data (/data/home/).").arg(CommonFunc::getCurrentOs() == OSType::Community ? "deepin" : "UOS"));
+                                           "as this installation configuration, then you can keep your data (/data/home/).").arg(CommonFunc::isNameDeepin()));
         m_modeTip_4->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
         m_modeTip_4->adjustSize();
         m_modeTip_5->setText(::QObject::tr("User data will be saved during system installation, and the disk encryption password will remain the same"));

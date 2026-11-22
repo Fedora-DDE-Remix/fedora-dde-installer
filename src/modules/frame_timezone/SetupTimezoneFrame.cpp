@@ -157,7 +157,7 @@ void SetupTimezoneFrame::initTimezoneConf(const QString &locale)
 
         if (m_timezone.isEmpty()) {
             qWarning() << "Timezone is empty in all places";
-            m_timezone = "Asia/Beijing";
+            m_timezone = "Asia/Shanghai";
         }
     }
 }

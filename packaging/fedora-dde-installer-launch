@@ -1,0 +1,25 @@
+#!/bin/bash
+# The fixed Live desktop entry. Never forward arbitrary commands or arguments
+# across the privilege boundary.
+set -euo pipefail
+if (( $# != 0 )); then
+    printf '%s\n' 'This launcher does not accept arguments.' >&2
+    exit 2
+fi
+
+if (( EUID != 0 )); then
+    # Reuse the Fedora Live image's existing sudo policy. This package does not
+    # grant passwordless sudo or polkit access to any group.
+    if sudo -n --validate 2>/dev/null; then
+        exec sudo -n --preserve-env=DISPLAY,XAUTHORITY -- \
+            /usr/bin/fedora-dde-installer-launch
+    fi
+    exec pkexec /usr/bin/fedora-dde-installer-launch
+fi
+
+# pkexec's allow_gui annotation preserves only DISPLAY and XAUTHORITY. XWayland
+# provides the same display path when the DDE Live desktop is running Wayland.
+unset BASH_ENV ENV LD_PRELOAD LD_LIBRARY_PATH PYTHONPATH PYTHONHOME QT_PLUGIN_PATH
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export QT_QPA_PLATFORM=xcb
+exec /usr/share/fedora-dde-installer/tools/fedora-dde-installer-core

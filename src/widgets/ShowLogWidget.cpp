@@ -6,12 +6,9 @@
 #include <QDebug>
 #include <QScrollBar>
 #include <QPushButton>
-#include <QLabel>
-#include <QStackedWidget>
 
 const int btnWidth = 202;
 const int btnHeight = 36;
-const int qrCodeBtnSize = 36;
 
 ShowLogWidget::ShowLogWidget(QWidget *parent) : QWidget(parent)
 {
@@ -48,21 +45,6 @@ void ShowLogWidget::exitInstallBtnClickedSlot()
     Q_EMIT exitInstallSignal();
 }
 
-void ShowLogWidget::switchQRAndLogBtnSlot()
-{
-    if (m_installLog->isVisible()) {
-        m_qrCodeBtn->setIcon(QIcon(":/images/failed_data.svg"));
-        m_logAndQRCodeWidget->setCurrentWidget(m_qrcodePicWidget);
-        m_installLog->hide();
-        m_qrcodePicWidget->show();
-    } else {
-        m_qrCodeBtn->setIcon(QIcon(":/images/failed_qr.svg"));
-        m_logAndQRCodeWidget->setCurrentWidget(m_installLog);
-        m_installLog->show();
-        m_qrcodePicWidget->hide();
-    }
-}
-
 void ShowLogWidget::initUI()
 {
     //保存
@@ -95,38 +77,15 @@ void ShowLogWidget::initUI()
     m_installLog->setStyleSheet("QPlainTextEdit{background-color:rgba(0, 0, 0, 0.05);"
                                 "border-radius:8px;}");
 
-    QVBoxLayout* qrcodePicLayout = new QVBoxLayout;
-    qrcodePicLayout->setContentsMargins(0,0,0,0);
-    QLabel *qrcodePic = new QLabel;
-    QSize qrPicSize = CommonFunc::getQRPicSize();
-    QString qrCodePath = (CommonFunc::getCurrentOs() == OSType::Community) ? ":/images/qr_code_deepin.svg" : ":/images/qr_code.svg";
-    qrcodePic->setPixmap(CommonFunc::loadSvgImage(qrCodePath, qrPicSize.width(), qrPicSize.height()));
-    qrcodePicLayout->addWidget(qrcodePic, 0, Qt::AlignHCenter);
-    m_qrcodePicWidget = new QWidget;
-    m_qrcodePicWidget->setLayout(qrcodePicLayout);
-    m_qrcodePicWidget->setObjectName("qrcodePicWidget");
-    m_qrcodePicWidget->setStyleSheet("QWidget#qrcodePicWidget{background-color:rgba(0, 0, 0, 0.05);"
-                                     "border-radius:8px;}");
-    m_qrcodePicWidget->hide();
-
-    m_logAndQRCodeWidget = new QStackedWidget();
-    m_logAndQRCodeWidget->setMaximumHeight(230);
-    m_logAndQRCodeWidget->setMinimumHeight(60);
-    m_logAndQRCodeWidget->addWidget(m_installLog);
-    m_logAndQRCodeWidget->addWidget(m_qrcodePicWidget);
-    m_logAndQRCodeWidget->setCurrentWidget(m_installLog);
-
-    m_qrCodeBtn = new QPushButton(this);
-    m_qrCodeBtn->setIconSize(QSize(24, 24));
-    m_qrCodeBtn->setFixedSize(qrCodeBtnSize,qrCodeBtnSize);
-    m_qrCodeBtn->setIcon(QIcon(":/images/failed_qr.svg"));
+    m_installLog->setMaximumHeight(230);
+    m_installLog->setMinimumHeight(60);
 
     QVBoxLayout *mainLayout = new QVBoxLayout;
     mainLayout->setSpacing(0);
     QSize showSize = CommonFunc::getShowSize();
     mainLayout->setContentsMargins(showSize.width() / 6, 0, showSize.width() / 6, 0);
     mainLayout->addSpacing(10);
-    mainLayout->addWidget(m_logAndQRCodeWidget);
+    mainLayout->addWidget(m_installLog);
     mainLayout->addSpacing(10);
     mainLayout->addWidget(buttonsWidget, 0, Qt::AlignBottom | Qt::AlignHCenter);
 
@@ -137,7 +96,6 @@ void ShowLogWidget::initConnect()
 {
     connect(m_saveLogBtn, &QPushButton::clicked, this, &ShowLogWidget::saveLogBtnClickedSlot);
     connect(m_exitInstallBtn, &QPushButton::clicked, this, &ShowLogWidget::exitInstallBtnClickedSlot);
-    connect(m_qrCodeBtn, &QPushButton::clicked, this, &ShowLogWidget::switchQRAndLogBtnSlot);
 }
 
 void ShowLogWidget::updateTs()
@@ -149,10 +107,5 @@ void ShowLogWidget::updateTs()
 void ShowLogWidget::showEvent(QShowEvent *event)
 {
     updateTs();
-    if (m_qrCodeBtn != nullptr) {
-        QSize showSize = CommonFunc::getShowSize();
-        int xPos = CommonFunc::getShowSize().width() - ((showSize.width() / 6) * 2) - m_qrCodeBtn->width() - 10;
-        m_qrCodeBtn->move(m_logAndQRCodeWidget->x() + xPos, m_logAndQRCodeWidget->y() + 10);
-        m_qrCodeBtn->raise();
-    }
+    QWidget::showEvent(event);
 }

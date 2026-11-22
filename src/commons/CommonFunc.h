@@ -2,6 +2,7 @@
 #define COMMONFUNC_H
 
 #include "structs.h"
+#include "InstallWorkflow.h"
 
 #include <QStringList>
 #include <QString>
@@ -17,6 +18,7 @@
 
 class CommonFunc {
 public:
+    static InstallWorkflow &installWorkflow();
 
     // 读取环境变量的接口
     static QString getSystemEnv(const QString &key);
@@ -138,7 +140,6 @@ public:
     static bool isTPM();
     // ghost安装
     static bool isGhost();
-    static bool isAuotInstall();
     static EGhostCode checkUimagePath(const QString &uimagePath, const QString &devs, QString &out);
 
     // 是否有后配置阶段，true有false无
@@ -223,10 +224,9 @@ public:
     static bool isFullDiskbyFSTab(const QList<FSTabInfo> &tabList);
 
     // 重启系统
-    static void rebootSystem();
+    static bool rebootSystem();
 
     // 关闭系统
-    static void shutdownSystem();
 
     static SPartitionInfo getEFIPartitionInfo(const SDeviceInfo &dev);
     static SPartitionInfo getBootPartitionInfo(const SDeviceInfo &dev);
@@ -272,7 +272,6 @@ public:
 
     static bool isInDesktop();
 
-    static bool canImmutableSystem();
 
     static void setRecoveryKey();
 

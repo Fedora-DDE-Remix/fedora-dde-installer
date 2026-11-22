@@ -11,6 +11,7 @@
 class QPushButton;
 class ListWidget;
 class QStackedLayout;
+class QStackedWidget;
 class FramePluginInterface;
 class PageIndicator;
 
@@ -23,7 +24,7 @@ public:
     // 设置主界面插件
     void showPlugins(const QStack<SPluginInfo> &plugs);
 
-    void loadPlugins(const QString &pluginType = "deepin_installer_plugins");
+    bool loadPlugins(const QString &pluginType = "fedora_dde_installer_plugins");
 
     void setTranslator(QTranslator *trans) {
         m_translator = trans;
@@ -56,6 +57,7 @@ private:
     // 处理主界面的翻译
     void updateTs();
 private:
+    bool m_pluginsLoaded = false;
     QLabel *m_titleLabel;
     QStackedWidget *m_pluginWidget;
     PageIndicator *m_pageWidgets;

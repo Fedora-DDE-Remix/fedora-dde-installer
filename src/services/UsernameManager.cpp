@@ -62,15 +62,14 @@ bool UsernameManager::checked(const QString& username, QString& err)
     const int minLen = CommonFunc::getSettingsInt("DI_USERNAME_MIN_LEN_CONFIG");
     const int maxLen = CommonFunc::getSettingsInt("DI_USERNAME_MAX_LEN_CONFIG");
 
-    err = ::QObject::tr("Username must start with letters or numbers, only contain letters"
-                        ", numbers, dashes (-) and underscores (_), and cannot use numbers alone");
+    err = ::QObject::tr("Use lowercase letters, numbers, dashes (-) and underscores (_). Start with a lowercase letter or underscore.");
     if (username.isEmpty() && (minLen > 0)) {
         return false;
     }
 
     // 创建的用户名是否符合命名规则，用户名以字母或数字开头，只允许使用字母、数字、连接符（-）和下划线（_），且不可以使用纯数字
     
-    if (!QRegularExpression("^[a-zA-Z0-9][a-zA-Z0-9_-]*$").match(username).hasMatch()) {
+    if (!QRegularExpression("^[a-z_][a-z0-9_-]{0,31}$").match(username).hasMatch()) {
         return false;
     }
 
@@ -94,7 +93,7 @@ bool UsernameManager::checked(const QString& username, QString& err)
     }
 
     //创建的用户名是否为Linux系统已有的用户名或组名
-    if (IsReservedUsername(username)) {
+    if (username == "dde" || IsReservedUsername(username)) {
         err = ::QObject::tr("This username already exists");
         return false;
     }

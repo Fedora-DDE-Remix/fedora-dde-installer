@@ -1,142 +1,53 @@
-# 增加源文件
-file(GLOB BASES_FILES bases/*.h bases/*.cpp)
-file(GLOB RESOURCE_FILES resources/images/images.qrc)
-file(GLOB COMMONS_FILES commons/*.h commons/*.cpp)
-file(GLOB SERVICES_FILES services/*.h services/*.cpp services/inner/*.h services/inner/*.cpp)
-file(GLOB WIDGETS_FILES widgets/*.h widgets/*.cpp)
-file(GLOB INTERFACES_FILES interfaces/*.h interfaces/*.cpp)
-file(GLOB TESTS_FILES tests/*.h tests/*.cpp)
+file(GLOB BASES_FILES CONFIGURE_DEPENDS bases/*.h bases/*.cpp)
+file(GLOB COMMONS_FILES CONFIGURE_DEPENDS commons/*.h commons/*.cpp)
+file(GLOB SERVICES_FILES CONFIGURE_DEPENDS services/*.h services/*.cpp services/inner/*.h services/inner/*.cpp)
+file(GLOB WIDGETS_FILES CONFIGURE_DEPENDS widgets/*.h widgets/*.cpp)
+file(GLOB INTERFACES_FILES CONFIGURE_DEPENDS interfaces/*.h interfaces/*.cpp)
 
-# 增加头文件和库
-include_directories(bases commons services widgets interfaces tests)
+# Share the same manager instances and symbols between the application and its
+# dynamically loaded plugins. Do not rely on symbols exported by an executable.
+add_library(FedoraDDEInstallerCore SHARED
+    ${BASES_FILES} ${COMMONS_FILES} ${SERVICES_FILES} ${WIDGETS_FILES}
+    ${INTERFACES_FILES} resources/images/images.qrc)
+set_target_properties(FedoraDDEInstallerCore PROPERTIES
+    OUTPUT_NAME fedora-dde-installer-common VERSION ${PROJECT_VERSION} SOVERSION 0)
+target_include_directories(FedoraDDEInstallerCore PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/bases ${CMAKE_CURRENT_SOURCE_DIR}/commons
+    ${CMAKE_CURRENT_SOURCE_DIR}/services ${CMAKE_CURRENT_SOURCE_DIR}/widgets
+    ${CMAKE_CURRENT_SOURCE_DIR}/interfaces)
+target_link_libraries(FedoraDDEInstallerCore PUBLIC ${LINK_LIBS})
+install(TARGETS FedoraDDEInstallerCore
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} NAMELINK_SKIP)
+install(FILES resources/timezone_alias
+    DESTINATION "${INSTALL_TARGET}/src/resources")
 
+function(installer_application suffix source)
+    if(suffix STREQUAL "main")
+        set(target fedora-dde-installer)
+    else()
+        set(target fedora-dde-installer-${suffix})
+    endif()
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE FedoraDDEInstallerCore)
+    install(TARGETS ${target} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+endfunction()
 
-#　前配置安装模块
-add_executable(deepin-installer
-    apps/deepin_installer.cpp
-    "${COMMONS_FILES}"
-    "${SERVICES_FILES}"
-    "${RESOURCE_FILES}"
-    "${WIDGETS_FILES}"
-    "${INTERFACES_FILES}"
-    "${BASES_FILES}")
-target_link_libraries(deepin-installer ${LINK_LIBS})
-add_dependencies(deepin-installer installer-qm-update)
+installer_application(main apps/deepin_installer.cpp)
+installer_application(parted apps/deepin_installer_parted.cpp)
+installer_application(parted-util apps/deepin_installer_parted_util.cpp)
 
-## 试用模式配置模块
-add_executable(deepin-installer-live-config
-        apps/deepin_installer_live_config.cpp
-        "${COMMONS_FILES}"
-        "${SERVICES_FILES}"
-        "${RESOURCE_FILES}"
-        "${WIDGETS_FILES}"
-        "${INTERFACES_FILES}"
-        "${BASES_FILES}")
-target_link_libraries(deepin-installer-live-config ${LINK_LIBS})
-add_dependencies(deepin-installer-live-config installer-qm-update)
+add_executable(fedora-dde-installer-config apps/deepin_installer_config.cpp)
+target_include_directories(fedora-dde-installer-config PRIVATE commons)
+target_link_libraries(fedora-dde-installer-config PRIVATE Qt6::Core)
+install(TARGETS fedora-dde-installer-config RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+add_dependencies(fedora-dde-installer installer-qm-update fedora-dde-installer-config
+    fedora-dde-installer-parted fedora-dde-installer-parted-util)
 
-## 后配置模块
-add_executable(deepin-installer-first-boot
-    apps/deepin_installer_first_boot.cpp
-    "${COMMONS_FILES}"
-    "${SERVICES_FILES}"
-    "${RESOURCE_FILES}"
-    "${WIDGETS_FILES}"
-    "${INTERFACES_FILES}"
-    "${BASES_FILES}")
-target_link_libraries(deepin-installer-first-boot ${LINK_LIBS})
-add_dependencies(deepin-installer-first-boot installer-qm-update)
-
-## 分区管理工具
-add_executable(deepin-installer-parted
-    apps/deepin_installer_parted.cpp
-    "${COMMONS_FILES}"
-    "${SERVICES_FILES}"
-    "${INTERFACES_FILES}"
-    "${BASES_FILES}")
-target_link_libraries(deepin-installer-parted ${LINK_LIBS})
-
-## 配置管理工具
-add_executable(deepin-installer-config
-    apps/deepin_installer_config.cpp)
-target_link_libraries(deepin-installer-config Qt6::Core)
-
-add_executable(deepin-installer-parted-util
-    apps/deepin_installer_parted_util.cpp
-    "${COMMONS_FILES}"
-    "${BASES_FILES}"
-    "${SERVICES_FILES}"
-)
-target_link_libraries(deepin-installer-parted-util ${LINK_LIBS})
-
-## 单元测试
-add_executable(deepin-installer-test
-    apps/deepin_installer_test.cpp
-    "${COMMONS_FILES}"
-    "${SERVICES_FILES}"
-    "${RESOURCE_FILES}"
-    "${WIDGETS_FILES}"
-    "${INTERFACES_FILES}"
-    "${BASES_FILES}"
-    "${TESTS_FILES}")
-target_link_libraries(deepin-installer-test ${LINK_LIBS} Qt6::Test)
-add_test(deepin-installer-test deepin-installer-test)
-
-add_executable(deepin-installer-command-agent
-    apps/deepin_installer_command_agent.cpp
-    "${BASES_FILES}"
-    "${COMMONS_FILES}"
-    "${SERVICES_FILES}"
-)
-target_link_libraries(deepin-installer-command-agent ${LINK_LIBS})
-
-## 安装目标文件
-install(TARGETS
-    deepin-installer
-    deepin-installer-first-boot
-    deepin-installer-live-config
-    deepin-installer-parted
-    deepin-installer-config
-    deepin-installer-parted-util
-    deepin-installer-command-agent
-    RUNTIME DESTINATION ${CMAKE_INSTALL_PREFIX}/bin/
-)
-
-# 增加子目录
+# All modules link to the shared core; their established names are the plugin ABI.
+set(LINK_LIBS FedoraDDEInstallerCore)
 add_subdirectory(modules)
-add_dependencies(deepin-installer
-        deepin-installer-parted
-        deepin-installer-config
-        deepin-installer-parted-util
-        DeepinConfigProgressFrame
-        DeepinInstallerComponentFrame
-        DeepinInstallerLanguage
-        DeepinInstallerPartition
-        DeepinInstallerPartitionFrame
-        DeepinInstallerProgressFrame
-        DeepinInstallerUserInfoFrame
-        DeepinInstallerVerifyFrame
-        DeepinInstallerInstallApplicationFrame
-        DeepinInstallerPrepareFrame
-        DeepinInstallerRegionFormatFrame
-        DeepinInstallerSelectOSVersionFrame
-        DebugShellFrame
-        )
-
-add_dependencies(deepin-installer-first-boot
-        deepin-installer-parted
-        deepin-installer-config
-        deepin-installer-parted-util
-        DeepinConfigProgressFrame
-        DeepinInstallerComponentFrame
-        DeepinInstallerLanguage
-        DeepinInstallerPartition
-        DeepinInstallerPartitionFrame
-        DeepinInstallerProgressFrame
-        DeepinInstallerUserInfoFrame
-        DeepinInstallerVerifyFrame
-        DeepinInstallerInstallApplicationFrame
-        DeepinInstallerRegionFormatFrame
-        #DebugShellFrame
-        )
-
+add_dependencies(fedora-dde-installer
+    DeepinConfigProgressFrame DeepinInstallerLanguage DeepinInstallerPartition
+    DeepinInstallerPartitionFrame DeepinInstallerProgressFrame
+    DeepinInstallerUserInfoFrame DeepinInstallerVerifyFrame
+    DeepinInstallerPrepareFrame DeepinInstallerRegionFormatFrame)

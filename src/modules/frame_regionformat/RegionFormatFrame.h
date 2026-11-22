@@ -14,7 +14,9 @@
 #include <QPushButton>
 #include <QListWidget>
 #include <QStyledItemDelegate>
+#include <QPainter>
 #include <QPainterPath>
+#include <optional>
 
 class TitleWidget;
 
@@ -73,7 +75,7 @@ private:
     QString langCountryTrans(const QLocale &testLocale, bool resetChinaName = false) const;
     bool updateVariantListByLocale(const QString& locale);
     void onLanguageMenuSelected(int index);
-    void writeConf();
+    bool writeConf();
     void hideSearchableListViewDialog();
     std::optional<QStringList> getSupportedLocale();
 

@@ -1,6 +1,7 @@
 #include "PartitionSeniorManager.h"
 #include "PartitionOperateManager.h"
 #include "CommonFunc.h"
+#include <QSet>
 #include "DeviceManager.h"
 #include <QUuid>
 #include <QDebug>
@@ -755,92 +756,55 @@ bool PartitionSeniorManager::existVGName(const QString &vgName)
 
 bool PartitionSeniorManager::checkPartition(QString &log)
 {
-    bool efiFlag = false;
-    bool rootFlag = false;
-    bool persistentFlag = false;
-    bool bootFlag = false;
+    bool efi = false;
+    bool boot = false;
     qint64 rootSize = 0;
-    Q_UNUSED(persistentFlag);
-    Q_UNUSED(bootFlag);
-    auto reset = PartitionOperateManager::instance()->getCurrentDeviceInfo();
-    for (SDeviceInfo dev : reset.keys()) {
-        QList<SPartitionInfo> partList = reset.value(dev);
-        for (SPartitionInfo par : partList) {
-            if (par.usage == ESpaceUsage::USE && par.isEFIPartition && (!dev.isStartDevice)) {
-                efiFlag = true;
+    QSet<QString> selectedDevices;
+    const auto devices = PartitionOperateManager::instance()->getCurrentDeviceInfo();
+    for (auto device = devices.cbegin(); device != devices.cend(); ++device) {
+        for (const auto &partition : device.value()) {
+            if (partition.usage != ESpaceUsage::USE || partition.mountPoint.isEmpty())
+                continue;
+            selectedDevices.insert(device.key().device);
+            if (!CommonFunc::isUEFI() && device.key().type != EDisklabelType::MsDos) {
+                log = ::QObject::tr("Legacy BIOS installation requires an MBR disk. Use Full Disk to create this layout.");
+                return false;
             }
-
-            // 检查是否有创建根分区
-            if (par.usage == ESpaceUsage::USE && par.mountPoint == "/") {
-                rootFlag = true;
-                rootSize = par.size;
+            if (partition.isCrypt || !partition.cryptPassword.isEmpty()
+                    || partition.mountPoint == "/persistent") {
+                log = ::QObject::tr("Choose ordinary writable partitions for Fedora DDE Remix.");
+                return false;
             }
-
-            if (par.usage == ESpaceUsage::USE && par.mountPoint == "/persistent") {
-                persistentFlag = true;
+            if (partition.mountPoint == "/") {
+                if (!partition.isNeedFormat) {
+                    log = ::QObject::tr("Select formatting for the root partition.");
+                    return false;
+                }
+                rootSize = partition.size;
             }
-
-            if (par.usage == ESpaceUsage::USE && par.mountPoint == "/boot") {
-                bootFlag = true;
-            }
+            if (partition.mountPoint == "/boot")
+                boot = partition.filesystem == "ext4" && partition.isNeedFormat;
+            if (partition.mountPoint == "/boot/efi" && !device.key().isStartDevice)
+                efi = partition.isEFIPartition || partition.filesystem == "vfat";
         }
     }
-
-    auto vgInfos = PartitionOperateManager::instance()->getCurrentLVMInfo();
-    for (SVGInfo vg : vgInfos.keys()) {
-        for(SLVMInfo& lv : vgInfos[vg]) {
-            // 检查lvm中是否有根分区
-            if (lv.usage == ESpaceUsage::USE && lv.mountPoint == "/") {
-                rootFlag = true;
-                rootSize = lv.size;
-            }
-
-            if (lv.usage == ESpaceUsage::USE && lv.mountPoint == "/persistent") {
-                persistentFlag = true;
-            }
-
-            if (lv.usage == ESpaceUsage::USE && lv.mountPoint == "/boot") {
-                bootFlag = true;
-            }
-        }
-    }
-
-    if (CommonFunc::isUEFI() && !efiFlag) {
-       log = ::QObject::tr("Please create a %1 partition").arg("/boot/efi");
-       return false;
-    }
-
-    //if (!bootFlag) {
-    //    log = ::QObject::tr("Please create a %1 partition").arg("/boot");
-    //    return false;
-    //}
-
-    if (!rootFlag) {
-        log = ::QObject::tr("Please create a %1 partition").arg("/");
+    if (!CommonFunc::isUEFI() && selectedDevices.size() > 1) {
+        log = ::QObject::tr("Select partitions on one disk for a legacy BIOS installation.");
         return false;
     }
-
-    //if (!persistentFlag && CommonFunc::getCurrentOsVersion() == "V25") {
-    //    log = ::QObject::tr("Please create a %1 partition").arg("/persistent");
-    //    return false;
-    //}
-
-    if(m_encryptPart.first && !partitionEncryptIsReady(m_encryptPart.second)) {
-        log = ::QObject::tr("please create a boot partition to enable encrypt / partition");
+    if (CommonFunc::isUEFI() && !efi) {
+        log = ::QObject::tr("Please create a %1 partition").arg("/boot/efi (FAT32)");
         return false;
     }
-
-    if (rootFlag && !persistentFlag) {
-        // 如果没有创建persistent分区,且当前根分区小于根分区最小值加persistent分区最小值和则提示用户空间不够
-        auto rootConfigSize = CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG");
-        auto persistentConfigSize = CommonFunc::getSettingsInt("DI_PERSISTENT_SIZE_CONFIG");
-        if (rootSize < rootConfigSize + persistentConfigSize) {
-            log = ::QObject::tr("The partition size is less than the minimum disk space requirement (%1) for system installation.")
-                                     .arg(QString("%1GiB").arg(QString::number((rootConfigSize / giDeviceUnitSize) + (persistentConfigSize / giDeviceUnitSize))));
-            return false;
-        }
+    if (!boot) {
+        log = ::QObject::tr("Create a separate ext4 /boot partition and select formatting.");
+        return false;
     }
-
+    const qint64 minimum = CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG");
+    if (rootSize < minimum) {
+        log = ::QObject::tr("The root partition must have at least %1 GiB.").arg(minimum / giDeviceUnitSize);
+        return false;
+    }
     return true;
 }
 
@@ -1191,6 +1155,11 @@ bool PartitionSeniorManager::checkNewRootPartitionIsBootloader(const SPartitionI
 bool PartitionSeniorManager::checkDialogNextEnable(const SPartitionInfo &info, QString &err)
 {
     err = QString();
+    const QStringList supported = {"ext4", "xfs", "btrfs", "vfat", "linux-swap", "swap"};
+    if (!supported.contains(info.filesystem) || info.isCrypt || info.mountPoint == "/persistent") {
+        err = ::QObject::tr("Choose a supported filesystem on an ordinary writable partition.");
+        return false;
+    }
     const QString splitChar = "、";
     QStringList bootFileSystem = CommonFunc::getSettingsStringList("DI_BOOT_PARTITION_FS_CONFIG");
 
@@ -1237,8 +1206,7 @@ bool PartitionSeniorManager::checkDialogNextEnable(const SPartitionInfo &info, Q
     double showSize = 0.0;
     if ("/" == info.mountPoint) {
         minSize = CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG");
-    } else if ("/persistent" == info.mountPoint) {
-        minSize = CommonFunc::getSettingsInt("DI_PERSISTENT_SIZE_CONFIG");
+
     } else if ("/boot" == info.mountPoint) {
         minSize = CommonFunc::getSettingsInt("DI_BOOT_SIZE_CONFIG");
     } else if ("/boot/efi" == info.mountPoint) {

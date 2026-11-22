@@ -6,8 +6,6 @@
 
 class QPlainTextEdit;
 class QPushButton;
-class QLabel;
-class QStackedWidget;
 
 DWIDGET_USE_NAMESPACE
 
@@ -26,7 +24,6 @@ signals:
 private slots:
     void saveLogBtnClickedSlot();
     void exitInstallBtnClickedSlot();
-    void switchQRAndLogBtnSlot();
 
 private:
     void initUI();
@@ -38,9 +35,6 @@ protected:
 
 private:
     QPlainTextEdit* m_installLog = nullptr;
-    QWidget *m_qrcodePicWidget = nullptr;
-    QStackedWidget *m_logAndQRCodeWidget = nullptr;
-    QPushButton* m_qrCodeBtn = nullptr;
     QPushButton* m_exitInstallBtn = nullptr;
     DSuggestButton* m_saveLogBtn = nullptr;
 };

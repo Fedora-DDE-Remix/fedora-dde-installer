@@ -1,0 +1,20 @@
+# Local CMake builds and staged packages
+/build/
+/build-*/
+/cmake-build-*/
+/stage/
+/rpmbuild/
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/CTestTestfile.cmake
+/Testing/
+
+# Local checks and Python bytecode
+/.checks/
+__pycache__/
+*.py[cod]
+
+# Generated catalogs and package artifacts
+*.qm
+*.rpm

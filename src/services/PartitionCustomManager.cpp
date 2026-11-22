@@ -67,7 +67,7 @@ void PartitionCustomManager::newPartition(const SDeviceInfo &devName, const SPar
             SPartitionInfo newfreeName = freeName;
             auto devInfosDeleteDataPart = PartitionOperateManager::instance()->getCurrentDeviceInfo();
             for (SPartitionInfo in : devInfosDeleteDataPart.value(dev)) {
-                if (in.mountPoint.contains("/persistent")) {
+                if (in.mountPoint == "/home") {
                     newfreeName = PartitionSeniorManager::instance()->delPartition(devName, in);
                 }
             }
@@ -225,7 +225,7 @@ SPartitionInfo PartitionCustomManager::getRootaPartitionInfo(qint64 size, const 
     info.deviceSize = dev.size;
     info.filesystem = "ext4";
     info.mountPoint = "/";
-    info.label = CommonFunc::getSettingsBool("DI_IMMUTABLE_SYSTEM") ? gRootaLabel : gRootLabel;
+    info.label = gRootLabel;
     info.isStartPoint = true;
     info.sectorSize = dev.sectors;
     info.phySectorSize = dev.physectors;
@@ -282,8 +282,8 @@ SPartitionInfo PartitionCustomManager::getDataPartitionInfo(qint64 size, const S
     info.device = dev.device;
     info.deviceSize = dev.size;
     info.filesystem = "ext4";
-    info.mountPoint = "/persistent";
-    info.label = gDataLabel;
+    info.mountPoint = "/home";
+    info.label = gHomeLabel;
     info.isStartPoint = true;
     info.sectorSize = dev.sectors;
     info.phySectorSize = dev.physectors;

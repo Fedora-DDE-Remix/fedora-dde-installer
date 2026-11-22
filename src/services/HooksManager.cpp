@@ -5,73 +5,89 @@
 
 #include <QThread>
 #include <QDebug>
-#include <QFile>
 #include <QTimer>
 
-HooksManager* HooksManager::m_instance = nullptr;
-bool HooksManager::m_started = false;
-HooksManager *HooksManager::instance(){
-    if(m_instance == nullptr)
-        m_instance = new HooksManager();
+HooksManager *HooksManager::m_instance = nullptr;
+HooksManager *HooksManager::instance()
+{
+    if (!m_instance)
+        m_instance = new HooksManager;
     return m_instance;
 }
 
-HooksManager::HooksManager():
-    d(new HooksManagerPrivate)
-{
-}
+HooksManager::HooksManager() = default;
 
-void HooksManager::setWorkspaceDirs(const QStringList &lis)
+void HooksManager::setWorkspaceDirs(const QStringList &directories)
 {
-    qInfo() << "hook list " << lis;
-
-    // 再获取目录下hooks脚本进行处理
-    for (QString key : lis) {
-        SHooksInfo hook;
-        hook.id = key;
-        hook.hooks = CommonFunc::getDirs(key);
-        d->m_workspacesHooks.append(hook);
+    if (m_started) {
+        qWarning() << "Cannot replace an active installation stage";
+        return;
     }
+    m_directories = directories;
 }
 
 void HooksManager::startInstall()
 {
-    if (m_started) {
+    if (m_started)
+        return;
+
+    auto *worker = new HooksManagerPrivate;
+    for (const auto &directory : m_directories) {
+        SHooksInfo stage;
+        stage.id = directory;
+        stage.hooks = CommonFunc::getDirs(directory, {"*.job"});
+        if (stage.hooks.isEmpty()) {
+            delete worker;
+            Q_EMIT exitInstall(tr("No installation hooks were found in %1").arg(directory));
+            return;
+        }
+        worker->m_workspacesHooks.append(stage);
+    }
+    if (worker->jobSize() == 0) {
+        delete worker;
+        Q_EMIT exitInstall(tr("No installation stage is configured"));
         return;
     }
 
-    // 重置安装进度
-    CommonFunc::setSettingsValue("DI_INSTALLER_STATUS", 0);
-
-    QTimer *progressTimer = new QTimer;
-    auto dataDevice = CommonFunc::getSettingsValue("DI_DATA_DEVICE_CONFIG");
-    int timerValue = 10000;
-    if (!CommonFunc::getSettingsValue("DI_DEVICE_LIST").toString().contains("nvme") || CommonFunc::isVirtualMachine()) {
-        timerValue = 15000;
-    }
-    qInfo() << "timerValue: " << timerValue;
-    progressTimer->setInterval(timerValue);
-    
-    connect(progressTimer, &QTimer::timeout, this, &HooksManager::updateProgress);
-    progressTimer->start();
-
-    QThread* installThread = new QThread;
-    connect(installThread, &QThread::started, d, &HooksManagerPrivate::install);
-    connect(installThread, &QThread::finished, installThread, &QThread::deleteLater);
-    connect(d, &HooksManagerPrivate::update, this, &HooksManager::updateProgress);
-    connect(d, &HooksManagerPrivate::finished, this, &HooksManager::finished);
-    connect(d, &HooksManagerPrivate::exitInstall, this, &HooksManager::exitInstall);
-    connect(d, &HooksManagerPrivate::finished, installThread, &QThread::quit);
-    connect(d, &HooksManagerPrivate::exitInstall, installThread, &QThread::quit);
-    connect(d, &HooksManagerPrivate::finished, progressTimer, &QTimer::stop);
-    connect(d, &HooksManagerPrivate::exitInstall, progressTimer, &QTimer::stop);
-    connect(d, &HooksManagerPrivate::finished, progressTimer, &QTimer::deleteLater);
-    connect(d, &HooksManagerPrivate::exitInstall, progressTimer, &QTimer::deleteLater);
-    
-    d->moveToThread(installThread);  // 将对象move到线程中运行
-    installThread->start();
     m_started = true;
-    this->updateProgress();
+    m_succeeded = false;
+    m_error.clear();
+    m_progress = 0;
+    CommonFunc::setSettingsValue("DI_INSTALLER_STATUS", 0);
+    auto *thread = new QThread(this);
+    auto *timer = new QTimer(this);
+    timer->setInterval(1000);
+    connect(timer, &QTimer::timeout, this, &HooksManager::updateProgress);
+    connect(worker, &HooksManagerPrivate::update, this, &HooksManager::updateProgress);
+    connect(thread, &QThread::started, worker, &HooksManagerPrivate::install);
+    connect(worker, &HooksManagerPrivate::finished, this, [this, thread] {
+        m_succeeded = true;
+        thread->quit();
+    });
+    connect(worker, &HooksManagerPrivate::exitInstall, this, [this, thread](const QString &error) {
+        m_error = error;
+        thread->quit();
+    });
+    connect(thread, &QThread::finished, worker, &QObject::deleteLater);
+    connect(thread, &QThread::finished, this, [this, timer, thread] {
+        timer->stop();
+        timer->deleteLater();
+        thread->deleteLater();
+        // Reset before notifying the GUI. Its next page may immediately start
+        // the account-configuration stage or retry a failed configuration.
+        m_started = false;
+        if (m_succeeded) {
+            m_progress = 100;
+            Q_EMIT progress(100);
+            Q_EMIT finished();
+        } else {
+            Q_EMIT exitInstall(m_error);
+        }
+    });
+    worker->moveToThread(thread);
+    timer->start();
+    thread->start();
+    Q_EMIT progress(0);
 }
 
 QString HooksManager::getProgressStatus()
@@ -81,24 +97,9 @@ QString HooksManager::getProgressStatus()
 
 void HooksManager::updateProgress()
 {
-    static int offset = 0;
-    if (!d->m_workspacesHooks.isEmpty() && d->jobSize() > 0) {
-        if (d->m_hooksStep > d->m_workspacesHooks.size()) {
-            offset = 100;
-            Q_EMIT progress(offset);
-        } else {
-            if (offset >= 100) {
-                Q_EMIT progress(100);
-            } else {
-                offset++;
-                int installStatus = CommonFunc::getSettingsInt("DI_INSTALLER_STATUS");
-                offset = qMax(offset, installStatus);
-                //qInfo() << "offset=" << offset;
-                Q_EMIT progress(offset);
-            }
-        }
-    } else {
-        offset = 100;
-        Q_EMIT progress(offset);
-    }
+    if (!m_started)
+        return;
+    // Never claim completion from a timer; only successful hooks finish a stage.
+    m_progress = qBound(0, CommonFunc::getSettingsInt("DI_INSTALLER_STATUS"), 99);
+    Q_EMIT progress(m_progress);
 }

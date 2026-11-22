@@ -24,18 +24,6 @@ public:
 signals:
     void startAnime();
 private:
-    void initV20DesktopString();
-
-    void initV20ProfessionalString();
-
-    void initV23DesktopString();
-
-    void initV23ProfessionalString();
-
-    void initV25DefaultTitleString();
-
-
-private:
     QLabel *m_titleLabel = nullptr;
     QLabel *m_promptLabel = nullptr;
     QProgressBar *m_progressWidget = nullptr;

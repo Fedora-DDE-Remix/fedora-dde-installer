@@ -1,0 +1,63 @@
+[
+  {
+    "mode": "default",
+    "plugins": [
+      {
+        "name": "SelectLanguages",
+        "version": "",
+        "path": "libDeepinInstallerLanguage.so",
+        "osType": [
+          "Fedora"
+        ]
+      },
+      {
+        "name": "InstallerPartition",
+        "version": "",
+        "path": "libDeepinInstallerPartitionFrame.so",
+        "osType": [
+          "Fedora"
+        ]
+      },
+      {
+        "name": "InstallPrepare",
+        "version": "",
+        "path": "libDeepinInstallerPrepareFrame.so",
+        "osType": [
+          "Fedora"
+        ]
+      },
+      {
+        "name": "InstallerProgress",
+        "version": "",
+        "path": "libDeepinInstallerProgressFrame.so",
+        "osType": [
+          "Fedora"
+        ]
+      },
+      {
+        "name": "UserInfo",
+        "version": "",
+        "path": "libDeepinInstallerUserInfoFrame.so",
+        "osType": [
+          "Fedora"
+        ]
+      },
+      {
+        "name": "RegionFormat",
+        "version": "",
+        "path": "libDeepinInstallerRegionFormatFrame.so",
+        "osType": [
+          "Fedora"
+        ]
+      },
+      {
+        "name": "ConfigureInstalledSystem",
+        "version": "",
+        "path": "libDeepinConfigProgressFrame.so",
+        "osType": [
+          "Fedora"
+        ]
+      }
+    ]
+  }
+]

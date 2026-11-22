@@ -1,0 +1,4 @@
+#!/bin/bash
+set -euo pipefail
+source /usr/share/fedora-dde-installer/tools/scripts/init_environment.sh
+exec /usr/bin/python3 -I "$DI_INSTALL_TOOLS_DIR_ENV/scripts/fedora_backend.py" copy

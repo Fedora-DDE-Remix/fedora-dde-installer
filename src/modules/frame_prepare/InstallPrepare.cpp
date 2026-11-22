@@ -58,7 +58,7 @@ void InstallPrepare::initUI()
     m_nvidiaDriver = new QCheckBox();
     m_nvidiaDriver->setFixedWidth(PI_CENTER_WIDTH);
     m_nvidiaDriver->setChecked(true);
-    m_nvidiaDriver->setVisible(CommonFunc::getSettingsBool("DI_NVIDIA_CHECK"));
+    m_nvidiaDriver->hide();
 
     m_btnNext = new DSuggestButton;
     m_btnNext->setFixedSize(360, 36);
@@ -78,12 +78,6 @@ void InstallPrepare::initUI()
 void InstallPrepare::initConnection()
 {
     connect(m_btnNext, &QAbstractButton::clicked, this, [=]{
-        CommonFunc::setSettingsValue("DI_INSTALL_NVIDIA_DRIVER", CommonFunc::getSettingsBool("DI_NVIDIA_CHECK") && m_nvidiaDriver->isChecked());
-        //ghost安装在点击准备安装后写DI_HOOKS_LIST，防止返回用其他方式安装后DI_HOOKS_LIST值被篡改
-        if (CommonFunc::isGhost()) {
-            QString hooksDir = CommonFunc::getSystemEnv("DI_INSTALL_TOOLS_DIR_ENV") + "/hooks";
-            CommonFunc::setSettingsValue("DI_HOOKS_LIST", QString("%1/before_chroot;%1/ghost_in_chroot;%1/ghost").arg(hooksDir));
-        }
         Q_EMIT next();
     });
 }

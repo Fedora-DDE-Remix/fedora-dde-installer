@@ -98,7 +98,7 @@ void ListWidget::showEvent(QShowEvent *event)
     qInfo() << "m_pageWidgets = " << m_pageWidgets->pos();
 
     // 试用模式时不显示Logo
-    if (qApp->applicationName() != "deepin-installer-live-config") {
+    if (qApp->applicationName() != "fedora-dde-installer-live-config") {
         CommonFunc::isBigScreen() ? m_logoLabel->move(61, 41) : m_logoLabel->move(30, 20);
         m_logoLabel->raise();
         m_logoLabel->show();

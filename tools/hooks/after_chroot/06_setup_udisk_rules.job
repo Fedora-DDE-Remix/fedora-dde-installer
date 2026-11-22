@@ -1,6 +1,0 @@
-#!/bin/bash
-
-#导入函数库
-source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
-
-setup_udisks_rules

@@ -21,7 +21,6 @@
 #include <QString>
 #include <QColor>
 #include <QPair>
-#include <deepin_pw_check.h>
 
 enum PasswdLevel {
     LowerLevel = 1,
@@ -44,18 +43,13 @@ private:
     PasswordManager();
     PasswordManager(const PasswordManager&) = delete;
 
-    void setup();
     int passwdStrength(const QString &passwd);
 
 private:
-    QString m_strongPasswordEnable;        // 开启强密码策略配置
     QString m_passwdValidatePolicy;        // 密码策略配置
     QString m_passwdValidateRequired;      // 密码强度配置
     QString m_passwdMaxLength;             // 密码最大长度配置
     QString m_passwdMinLength;             // 密码最小长度配置
-    QString m_passwdPalindromeLength;      // 密码回文长度配置
-    QString m_passwdContinuousLength;      // 密码连续字符长度配置
-    QString m_passwdMonotonousLength;      // 密码单调字符长度配置
 };
 
 #endif  // PASSWORDMANAGER_H

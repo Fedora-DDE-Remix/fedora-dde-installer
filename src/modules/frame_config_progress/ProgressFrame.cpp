@@ -1,157 +1,168 @@
 #include "ProgressFrame.h"
-#include "globals.h"
 #include "CommonFunc.h"
 #include "HooksManager.h"
-#include "AnimationWidget.h"
-#include "WarningDialog.h"
 
-#include <QObject>
-#include <QDebug>
-#include <QTimer>
-#include <QHBoxLayout>
-#include <QVBoxLayout>
+#include <QApplication>
+#include <QLabel>
 #include <QProgressBar>
-#include <DIconButton>
-#include <QLabel>
-#include <QLabel>
+#include <QPushButton>
+#include <QHBoxLayout>
+#include <QTimer>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 
-DWIDGET_USE_NAMESPACE
-
-ProgressFrame::ProgressFrame(QWidget *parent):
-    FramePluginInterface(parent)
+ProgressFrame::ProgressFrame(QWidget *parent)
+    : FramePluginInterface(parent)
 {
+    m_frameName = gFrameConfigure;
     hideBackButton();
     hideCloseButton();
 
-    QLabel *logoLabel = new QLabel(this);
-    logoLabel->setFixedSize(CommonFunc::isBigScreen() ? QSize(350, 320) : QSize(240, 200));
-    logoLabel->setPixmap(CommonFunc::loadSvgImage(":/images/config_progress.svg",logoLabel->width(), logoLabel->height()));
-    logoLabel->setAlignment(Qt::AlignCenter);
-    QHBoxLayout *logoLayout = new QHBoxLayout;
-    logoLayout->setContentsMargins(0, 0, 0, 0);
-    logoLayout->setSpacing(0);
-    logoLayout->addStretch();
-    logoLayout->addWidget(logoLabel);
-    logoLayout->addStretch();
-
-    // 标题提示信息
-    m_titleLabel = new QLabel(::QObject::tr("Configuring your computer"), this);
-    m_titleLabel->setStyleSheet("font-size:22px;font-weight: bold;");
+    m_logoLabel = new QLabel(this);
+    m_logoLabel->setFixedSize(160, 160);
+    m_logoLabel->setPixmap(QPixmap(CommonFunc::getSystemLogo()).scaled(160, 160, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    m_logoLabel->setAlignment(Qt::AlignCenter);
+    m_titleLabel = new QLabel(this);
     m_titleLabel->setAlignment(Qt::AlignCenter);
-    QHBoxLayout *titleLayout = new QHBoxLayout;
-    titleLayout->setContentsMargins(0, 0, 0, 0);
-    titleLayout->setSpacing(0);
-    titleLayout->addStretch();
-    titleLayout->addWidget(m_titleLabel);
-    titleLayout->addStretch();
-
-    // 进度显示
-    QProgressBar *progressWidget = new QProgressBar(this);
-    progressWidget->setAlignment(Qt::AlignHCenter | Qt::AlignVCenter);
-    progressWidget->setFixedWidth(CommonFunc::isBigScreen() ? 500 : 380);
-    progressWidget->setValue(0);
-    QHBoxLayout *progressLayout = new QHBoxLayout;
-    progressLayout->setContentsMargins(0, 0, 0, 0);
-    progressLayout->setSpacing(0);
-    progressLayout->addStretch();
-    progressLayout->addWidget(progressWidget);
-    progressLayout->addStretch();
-
-    // 进度提示信息
-    m_progLabel = new QLabel;
+    m_titleLabel->setStyleSheet("font-size:22px;font-weight:bold;");
+    m_titleLabel->setWordWrap(true);
+    m_progLabel = new QLabel(this);
     m_progLabel->setAlignment(Qt::AlignCenter);
-    QHBoxLayout *progLayout = new QHBoxLayout;
-    progLayout->setContentsMargins(0, 0, 0, 0);
-    progLayout->setSpacing(0);
-    progLayout->addStretch();
-    progLayout->addWidget(m_progLabel);
-    progLayout->addStretch();
+    m_progLabel->setTextFormat(Qt::PlainText);
+    m_progLabel->setWordWrap(true);
+    m_progLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    m_progressWidget = new QProgressBar(this);
+    m_progressWidget->setRange(0, 100);
+    m_progressWidget->setValue(0);
+    m_progressWidget->setFixedWidth(CommonFunc::isBigScreen() ? 500 : 380);
+    m_actionButton = new QPushButton(this);
+    m_actionButton->setMinimumSize(220, 36);
+    m_secondaryButton = new QPushButton(this);
+    m_secondaryButton->setMinimumSize(220, 36);
+    auto *actions = new QHBoxLayout;
+    actions->addStretch();
+    actions->addWidget(m_secondaryButton);
+    actions->addWidget(m_actionButton);
+    actions->addStretch();
 
-    m_warningFrame = new WarningDialog;
-    m_warningFrame->setCloseButtonVisible(false);
-    m_warningFrame->setDialogIcon(QPixmap(":/images/interaction_warning.svg"));
-
-    // 主布局
-    m_contentLayout->addSpacing(CommonFunc::isBigScreen() ? 160 : 80);
-    m_contentLayout->addLayout(logoLayout);
-    m_contentLayout->addLayout(titleLayout);
     m_contentLayout->addStretch();
-    m_contentLayout->addLayout(progressLayout);
-    m_contentLayout->addSpacing(CommonFunc::isBigScreen() ? 20 : 10);
-    m_contentLayout->addLayout(progLayout);
-    m_contentLayout->addSpacing(50);
+    m_contentLayout->addWidget(m_logoLabel, 0, Qt::AlignHCenter);
+    m_contentLayout->addSpacing(20);
+    m_contentLayout->addWidget(m_titleLabel);
+    m_contentLayout->addSpacing(15);
+    m_contentLayout->addWidget(m_progLabel);
+    m_contentLayout->addSpacing(20);
+    m_contentLayout->addWidget(m_progressWidget, 0, Qt::AlignHCenter);
+    m_contentLayout->addStretch();
+    m_contentLayout->addLayout(actions);
+    m_contentLayout->addSpacing(CommonFunc::getInnerMargin());
+    m_actionButton->hide();
+    m_secondaryButton->hide();
 
-    connect(HooksManager::instance(), &HooksManager::progress, progressWidget, [=](int progressValue){
-        if (CommonFunc::getSettingsInt("DI_INSTALLER_STATUS") == 100) {
-            progressWidget->setValue(100);
-            CommonFunc::setSettingsValue("DI_INSTALLER_STATUS", "101");
-        } else {
-            progressWidget->setValue(progressValue);
-        }
-        auto locale = CommonFunc::getSettingsString("DI_LOCALE");
-        if (locale == "ug_CN") { //维语特殊处理
-            progressWidget->setFormat(QString("%1%v").arg(QString("%1%").arg(QObject::tr("Configuration progress"))));
-        } else {
-            progressWidget->setFormat(QString("%1 %v%").arg(QObject::tr("Configuration progress")));
-        }
-
+    connect(HooksManager::instance(), &HooksManager::progress, this, [this](int value) {
+        if (m_running)
+            m_progressWidget->setValue(value);
     });
     connect(HooksManager::instance(), &HooksManager::finished, this, &ProgressFrame::finished);
     connect(HooksManager::instance(), &HooksManager::exitInstall, this, &ProgressFrame::exitInstall);
-
-    connect(m_warningFrame, &WarningDialog::enterBtnSignal, this, &ProgressFrame::warnWidgetEnterBtnSlot);
+    connect(m_actionButton, &QPushButton::clicked, this, &ProgressFrame::actionClicked);
+    connect(m_secondaryButton, &QPushButton::clicked, this, [this] {
+        if (m_complete) {
+            QApplication::quit();
+        } else if (!m_running && CommonFunc::installWorkflow().canEditUser()) {
+            Q_EMIT back();
+        }
+    });
 }
 
 void ProgressFrame::showEvent(QShowEvent *event)
 {
-    this->startInstall();
-    return FramePluginInterface::showEvent(event);
+    FramePluginInterface::showEvent(event);
+    if (!m_running && !m_complete)
+        QTimer::singleShot(0, this, &ProgressFrame::startInstall);
 }
 
 void ProgressFrame::updateTs()
 {
-    m_titleLabel->setText(::QObject::tr("Configuring your computer"));
-    m_progLabel->setText(::QObject::tr("It takes about a few minutes"));
-    m_warningFrame->setCommentText(::QObject::tr("An unknown problem has occurred, which may not affect the system running. Please click \"Skip\" to continue the installation. If you cannot enter the system later, please try to reinstall."));
-    m_warningFrame->setBtnText(::QObject::tr("Skip", "button"));
+    if (m_complete) {
+        m_titleLabel->setText(tr("Fedora DDE Remix is ready"));
+        m_progLabel->setText(tr("Your account and system settings have been saved. You can restart now or continue using the live desktop."));
+        m_actionButton->setText(tr("Restart Now"));
+        m_secondaryButton->setText(tr("Continue Using Live Desktop"));
+    } else if (!m_error.isEmpty()) {
+        m_titleLabel->setText(tr("Configuration could not be completed"));
+        m_progLabel->setText((m_accountSaved
+            ? tr("Your account has been saved. Retry to finish safely unmounting the installed system.")
+            : tr("The installed system is still mounted. Correct the problem and retry; the disk will not be formatted again.")) + "\n\n" + m_error);
+        m_actionButton->setText(tr("Retry Configuration"));
+        m_secondaryButton->setText(tr("Edit Settings"));
+    } else {
+        m_titleLabel->setText(tr("Saving your account and system settings"));
+        m_progLabel->setText(tr("Configuring the installed system and finishing the installation. Keep this window open."));
+    }
+    m_progressWidget->setFormat(tr("Configuration progress") + " %v%");
 }
 
 void ProgressFrame::startInstall()
 {
-#ifdef QT_DEBUG
-    QStringList testList = {gInstallDirTest + gInstallDirUserConfig};
-    HooksManager::instance()->setWorkspaceDirs(testList);
-#else
+    if (m_running || m_complete)
+        return;
+    if (!CommonFunc::installWorkflow().beginConfiguration()) {
+        m_error = tr("There is no completed installation to configure in this live session.");
+        updateTs();
+        return;
+    }
+    m_running = true;
+    m_error.clear();
+    m_progressWidget->show();
+    m_progressWidget->setValue(0);
+    m_actionButton->hide();
+    m_secondaryButton->hide();
+    updateTs();
+    // Backend validates /run state and mounted target before any account write.
     HooksManager::instance()->setWorkspaceDirs(CommonFunc::getSettingsStringList("DI_FB_HOOHS_LIST"));
-#endif //QT_DEBUG
-
     HooksManager::instance()->startInstall();
 }
 
 void ProgressFrame::finished()
 {
-    qInfo() << "install finished.";
-    if (CommonFunc::getSettingsBool("DI_REBOOT_AFTER_SETUP")) {
-        CommonFunc::rebootSystem();
+    if (!m_running || !CommonFunc::installWorkflow().configurationSucceeded())
+        return;
+    m_running = false;
+    m_complete = true;
+    m_progressWidget->setValue(100);
+    m_actionButton->show();
+    m_secondaryButton->show();
+    updateTs();
+    // Deliberately no automatic reboot, even if a legacy setting requests it.
+}
+
+void ProgressFrame::exitInstall(const QString &error)
+{
+    if (!m_running)
+        return;
+    m_running = false;
+    CommonFunc::installWorkflow().configurationFailed();
+    m_error = error.isEmpty() ? tr("See the installation log for details.") : error;
+    QFile stateFile("/run/fedora-dde-installer/state.json");
+    if (stateFile.open(QIODevice::ReadOnly)) {
+        const QString phase = QJsonDocument::fromJson(stateFile.readAll()).object().value("phase").toString();
+        m_accountSaved = phase == "user-configured" || phase == "finalized";
     }
+    m_actionButton->show();
+    m_secondaryButton->setVisible(!m_accountSaved);
+    updateTs();
 }
 
-void ProgressFrame::exitInstall(const QString &err)
+void ProgressFrame::actionClicked()
 {
-    qCritical() << "exit install." << err;
-    // 显示错误日志界面
-    QPoint point = mapToGlobal(QPoint());
-    m_warningFrame->move(point.x() + CommonFunc::getShowSize().width() / 2 - m_warningFrame->width() / 2,
-                         point.y() + CommonFunc::getShowSize().height() / 2 - m_warningFrame->height() / 2);
-    m_warningFrame->show();
-    m_warningFrame->raise();
-}
-
-void ProgressFrame::warnWidgetEnterBtnSlot()
-{
-#ifndef QT_DEBUG
-    CommonFunc::rebootSystem();
-#else
-    qInfo() << "reboot system!";
-#endif
+    if (m_complete && CommonFunc::installWorkflow().canRestart()) {
+        // Restart is only reachable through this explicit user action, after
+        // the backend has configured the account and finalized the target.
+        if (!CommonFunc::rebootSystem())
+            m_progLabel->setText(tr("The system is ready, but the restart request failed. You can restart from the live desktop."));
+    } else if (!m_running && CommonFunc::installWorkflow().canEditUser()) {
+        startInstall();
+    }
 }

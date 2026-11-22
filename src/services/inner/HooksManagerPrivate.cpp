@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QDateTime>
 #include <QThread>
+#include <QFileInfo>
 
 //调试伦轮播图
 #define DEBUG_PROGRESS_UPDATE_FRAME 0
@@ -16,7 +17,8 @@ void HooksManagerPrivate::install()
     for (const SHooksInfo& hook: m_workspacesHooks) {
         for (const QString& hk : hook.hooks) {
             if (!CommonFunc::execHook(hk, installLog)) {
-                Q_EMIT exitInstall(QString("%1 hooks run error.").arg(hk));
+                Q_EMIT exitInstall(tr("Installation step failed: %1").arg(QFileInfo(hk).fileName())
+                                   + "\n" + installLog.trimmed().right(2048));
                 return;
             } else {
                 Q_EMIT this->update();

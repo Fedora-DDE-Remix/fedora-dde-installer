@@ -1,35 +1,17 @@
-# 生成翻译
-## 设置QT语言cmake模块
-find_package(Qt6 COMPONENTS Widgets LinguistTools REQUIRED)
-
-## 通过源代码生成ts文件
-set(CREATE_TS_DIR
-    ${CMAKE_SOURCE_DIR}/src
-)
-find_program(LUPDATE_EXECUTABLE lupdate)
-execute_process(
-    COMMAND ${LUPDATE_EXECUTABLE} -source-language en
-    -no-obsolete
-    -recursive ${CREATE_TS_DIR}
-    -ts ${CMAKE_SOURCE_DIR}/i18n/deepin-installer-en_US.ts)
-
-## 获取ts源文件
-file(GLOB INSTALLER_TRANSLATION_TS
-    ${CMAKE_SOURCE_DIR}/i18n/deepin-installer*.ts)
-
-## 设置QM文件输出路径
-set_source_files_properties(${INSTALLER_TRANSLATION_TS} PROPERTIES OUTPUT_LOCATION ${CMAKE_BINARY_DIR}/i18n)
-qt6_add_translation(INSTALLER_TRANSLATION_QM ${INSTALLER_TRANSLATION_TS})
-add_custom_target(installer-qm-update DEPENDS ${INSTALLER_TRANSLATION_QM})
-
-## 将ts源文件显示在qtcreate中
-add_custom_target(ts SOURCES ${INSTALLER_TRANSLATION_TS})
-
-## 安装qm文件
-install(
-    DIRECTORY ${CMAKE_BINARY_DIR}/i18n
-    DESTINATION ${INSTALL_TARGET}
-    FILES_MATCHING PATTERN "*.qm"
-)
-
-
+# Compile translations without mutating source TS files during configure/build.
+# Accept the upstream filenames while giving every installed catalog our name.
+file(GLOB INSTALLER_TRANSLATION_TS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/deepin-installer-*.ts"
+    "${CMAKE_CURRENT_SOURCE_DIR}/fedora-dde-installer-*.ts")
+set(INSTALLER_TRANSLATION_QM)
+foreach(ts IN LISTS INSTALLER_TRANSLATION_TS)
+    get_filename_component(stem "${ts}" NAME_WE)
+    string(REGEX REPLACE "^deepin-installer-" "fedora-dde-installer-" stem "${stem}")
+    set(qm "${CMAKE_CURRENT_BINARY_DIR}/${stem}.qm")
+    add_custom_command(OUTPUT "${qm}"
+        COMMAND Qt6::lrelease "${ts}" -qm "${qm}"
+        DEPENDS "${ts}" VERBATIM)
+    list(APPEND INSTALLER_TRANSLATION_QM "${qm}")
+endforeach()
+add_custom_target(installer-qm-update ALL DEPENDS ${INSTALLER_TRANSLATION_QM})
+install(FILES ${INSTALLER_TRANSLATION_QM} DESTINATION "${INSTALL_TARGET}/i18n")

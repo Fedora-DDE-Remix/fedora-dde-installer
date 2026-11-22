@@ -1,0 +1,4 @@
+#!/bin/bash
+set -euo pipefail
+[[ "$#" -eq 0 ]] || exit 1
+exec /usr/share/fedora-dde-installer/tools/fedora-dde-installer-preinit

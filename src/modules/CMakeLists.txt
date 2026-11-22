@@ -1,21 +1,11 @@
-## 获取当前目录下的子目录
-MACRO(SUBDIRLIST result curdir)
-  FILE(GLOB children RELATIVE ${curdir} ${curdir}/*)
-  SET(dirlist "")
-  FOREACH(child ${children})
-    IF(IS_DIRECTORY ${curdir}/${child})
-      LIST(APPEND dirlist ${child})
-    ENDIF()
-  ENDFOREACH()
-  SET(${result} ${dirlist})
-ENDMACRO()
-SUBDIRLIST(DIRLIST ${CMAKE_CURRENT_SOURCE_DIR})
-
-## 自动向工程下添加modules目录，如果modules目录下没有CMakeLists，则自动生成CMakeLists.txt
-FOREACH(subdir ${DIRLIST})
-    set(M_PATH "${CMAKE_CURRENT_SOURCE_DIR}/${subdir}")
-    if(NOT EXISTS "${M_PATH}/CMakeLists.txt")
-        file(WRITE ${M_PATH}/CMakeLists.txt "")
-    endif()
-    add_subdirectory(${subdir})
-ENDFOREACH()
+# Explicitly select the modules used by the Fedora installer. Neither first-boot
+# configuration nor Deepin edition/application selection is part of this flow.
+foreach(module IN ITEMS
+        frame_languages frame_kblayouts frame_timezone frame_regionformat
+        frame_partitions task_partitions frame_prepare frame_verify
+        frame_progress frame_userinfo frame_config_progress)
+    add_subdirectory(${module})
+endforeach()
+if(FEDORA_DDE_DEBUG_CONSOLE)
+    add_subdirectory(frame_debug)
+endif()

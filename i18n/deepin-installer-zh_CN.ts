@@ -80,6 +80,10 @@
         <source>Select a install mode</source>
         <translation>请选择安装模式</translation>
     </message>
+    <message>
+        <source>Creates a boot partition, swap, and a writable root filesystem using the remaining disk space. All data on the selected disk will be erased.</source>
+        <translation>将创建引导分区、交换分区，并使用剩余空间创建可写根分区。所选磁盘上的全部数据将被清除。</translation>
+    </message>
 </context>
 <context>
     <name>InstallApplicationFrame</name>
@@ -192,6 +196,14 @@
         <location filename="../src/modules/frame_partitions/MultipleDiskPartitionFrame.cpp" line="936"/>
         <source>keep user data</source>
         <translation>保留用户数据</translation>
+    </message>
+    <message>
+        <source>At least %1 GiB of disk space is required.</source>
+        <translation>至少需要 %1 GiB 磁盘空间。</translation>
+    </message>
+    <message>
+        <source>Creates a boot partition, swap, and a writable root filesystem on the selected disk. All data on that disk will be erased.</source>
+        <translation>将在所选磁盘上创建引导分区、交换分区和可写根分区。该磁盘上的全部数据将被清除。</translation>
     </message>
 </context>
 <context>
@@ -339,6 +351,10 @@
         <location filename="../src/modules/frame_progress/ProgressFailedFrame.cpp" line="122"/>
         <source>Save the error log to a removable device</source>
         <translation>将错误日志保存到可移动设备</translation>
+    </message>
+    <message>
+        <source>Review the error log or save it to a removable device. You can return to the live desktop to investigate.</source>
+        <translation>请查看错误日志，或将日志保存到移动存储设备。可以返回 Live 桌面继续排查。</translation>
     </message>
 </context>
 <context>
@@ -2328,6 +2344,98 @@ Create init backup cost more time.</source>
         <source>Deepin Installer</source>
         <translation>安装器</translation>
     </message>
+    <message>
+        <source>A required page or configuration is missing. Rebuild the Live image with the complete Fedora DDE Remix Installer package.</source>
+        <translation>缺少必需的页面或配置。请使用完整的 Fedora DDE Remix 安装器软件包重新制作 Live 镜像。</translation>
+    </message>
+    <message>
+        <source>Choose a supported filesystem on an ordinary writable partition.</source>
+        <translation>请在普通可写分区上选择支持的文件系统。</translation>
+    </message>
+    <message>
+        <source>Choose ordinary writable partitions for Fedora DDE Remix.</source>
+        <translation>请为 Fedora DDE Remix 选择普通可写分区。</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <source>Copying system files...</source>
+        <translation>正在复制系统文件…</translation>
+    </message>
+    <message>
+        <source>Create a separate ext4 /boot partition and select formatting.</source>
+        <translation>请创建独立的 ext4 /boot 分区，并选择格式化。</translation>
+    </message>
+    <message>
+        <source>Fedora DDE Remix Installer</source>
+        <translation>Fedora DDE Remix 安装器</translation>
+    </message>
+    <message>
+        <source>Finishing system configuration...</source>
+        <translation>正在完成系统配置…</translation>
+    </message>
+    <message>
+        <source>Installing the bootloader and system settings...</source>
+        <translation>正在安装引导程序并配置系统…</translation>
+    </message>
+    <message>
+        <source>Legacy BIOS installation requires an MBR disk. Use Full Disk to create this layout.</source>
+        <translation>传统 BIOS 安装需要 MBR 磁盘。可以使用全盘安装创建该布局。</translation>
+    </message>
+    <message>
+        <source>No reviewed partition plan is available.</source>
+        <translation>没有已确认的分区方案。</translation>
+    </message>
+    <message>
+        <source>Preparing account setup...</source>
+        <translation>正在准备账户配置…</translation>
+    </message>
+    <message>
+        <source>Recommended development headers and libraries for developing applications to run on Fedora.</source>
+        <translation>用于开发 Fedora 应用程序的推荐头文件和开发库。</translation>
+    </message>
+    <message>
+        <source>Select formatting for the root partition.</source>
+        <translation>请选择格式化根分区。</translation>
+    </message>
+    <message>
+        <source>Select partitions on one disk for a legacy BIOS installation.</source>
+        <translation>传统 BIOS 安装请选择同一磁盘上的分区。</translation>
+    </message>
+    <message>
+        <source>System installed; account setup is next...</source>
+        <translation>系统已安装，即将配置账户…</translation>
+    </message>
+    <message>
+        <source>The installer could not start</source>
+        <translation>无法启动安装器</translation>
+    </message>
+    <message>
+        <source>The password must be different from the username.</source>
+        <translation>密码不能与用户名相同。</translation>
+    </message>
+    <message>
+        <source>The password must not contain control characters.</source>
+        <translation>密码不能包含控制字符。</translation>
+    </message>
+    <message>
+        <source>The reviewed partition plan could not be saved: %1</source>
+        <translation>无法保存已确认的分区方案：%1</translation>
+    </message>
+    <message>
+        <source>The root partition must have at least %1 GiB.</source>
+        <translation>根分区至少需要 %1 GiB。</translation>
+    </message>
+    <message>
+        <source>Use a longer password with a mix of letters, numbers or symbols.</source>
+        <translation>请使用更长的密码，并组合字母、数字或符号。</translation>
+    </message>
+    <message>
+        <source>Use lowercase letters, numbers, dashes (-) and underscores (_). Start with a lowercase letter or underscore.</source>
+        <translation>请使用小写字母、数字、连字符（-）和下划线（_），并以小写字母或下划线开头。</translation>
+    </message>
 </context>
 <context>
     <name>SelectFileWidget</name>
@@ -2343,6 +2451,10 @@ Create init backup cost more time.</source>
         <location filename="../src/modules/frame_partitions/SeniorPartitionFrame.cpp" line="434"/>
         <source>Are you sure to cancel encrypt %1?</source>
         <translation>确定取消加密%1 ？</translation>
+    </message>
+    <message>
+        <source>Create a root filesystem and a separate ext4 /boot partition. Select formatting for both. UEFI also requires a FAT32 /boot/efi partition.</source>
+        <translation>请创建根分区和独立的 ext4 /boot 分区，并选择格式化这两个分区。UEFI 安装还需要 FAT32 /boot/efi 分区。</translation>
     </message>
 </context>
 <context>
@@ -2392,6 +2504,171 @@ Create init backup cost more time.</source>
         <location filename="../src/modules/frame_verify/VerifyFrame.cpp" line="129"/>
         <source>Verification failed</source>
         <translation>校验失败</translation>
+    </message>
+</context>
+<context>
+    <name>HooksManager</name>
+    <message>
+        <source>No installation hooks were found in %1</source>
+        <translation>在 %1 中没有找到安装任务。</translation>
+    </message>
+    <message>
+        <source>No installation stage is configured</source>
+        <translation>尚未配置安装阶段。</translation>
+    </message>
+</context>
+<context>
+    <name>HooksManagerPrivate</name>
+    <message>
+        <source>Installation step failed: %1</source>
+        <translation>安装步骤失败：%1</translation>
+    </message>
+</context>
+<context>
+    <name>MainWindow</name>
+    <message>
+        <source>Fedora DDE Remix Installer</source>
+        <translation>Fedora DDE Remix 安装器</translation>
+    </message>
+</context>
+<context>
+    <name>ProgressFrame</name>
+    <message>
+        <source>Configuration could not be completed</source>
+        <translation>未能完成配置</translation>
+    </message>
+    <message>
+        <source>Configuration progress</source>
+        <translation>配置进度</translation>
+    </message>
+    <message>
+        <source>Configuring the installed system and finishing the installation. Keep this window open.</source>
+        <translation>正在配置已安装的系统并完成安装。请保持此窗口打开。</translation>
+    </message>
+    <message>
+        <source>Continue Using Live Desktop</source>
+        <translation>继续使用 Live 桌面</translation>
+    </message>
+    <message>
+        <source>Edit Settings</source>
+        <translation>修改设置</translation>
+    </message>
+    <message>
+        <source>Fedora DDE Remix is ready</source>
+        <translation>Fedora DDE Remix 已准备就绪</translation>
+    </message>
+    <message>
+        <source>Restart Now</source>
+        <translation>立即重启</translation>
+    </message>
+    <message>
+        <source>Retry Configuration</source>
+        <translation>重试配置</translation>
+    </message>
+    <message>
+        <source>Saving your account and system settings</source>
+        <translation>正在保存账户和系统设置</translation>
+    </message>
+    <message>
+        <source>See the installation log for details.</source>
+        <translation>请查看安装日志了解详情。</translation>
+    </message>
+    <message>
+        <source>The installed system is still mounted. Correct the problem and retry; the disk will not be formatted again.</source>
+        <translation>已安装的系统仍保持挂载。请排除问题后重试，磁盘不会再次格式化。</translation>
+    </message>
+    <message>
+        <source>The system is ready, but the restart request failed. You can restart from the live desktop.</source>
+        <translation>系统已准备就绪，但重启请求失败。可以从 Live 桌面重启。</translation>
+    </message>
+    <message>
+        <source>There is no completed installation to configure in this live session.</source>
+        <translation>当前 Live 会话中没有可配置的已完成安装。</translation>
+    </message>
+    <message>
+        <source>Your account and system settings have been saved. You can restart now or continue using the live desktop.</source>
+        <translation>账户和系统设置已保存。现在可以重启，也可以继续使用 Live 桌面。</translation>
+    </message>
+    <message>
+        <source>Your account has been saved. Retry to finish safely unmounting the installed system.</source>
+        <translation>账户已保存。请重试以完成已安装系统的安全卸载。</translation>
+    </message>
+</context>
+<context>
+    <name>ProgressUpdateFrame</name>
+    <message>
+        <source>A familiar desktop</source>
+        <translation>熟悉的桌面</translation>
+    </message>
+    <message>
+        <source>After the system is installed, you will create your account here without restarting.</source>
+        <translation>系统安装完成后，将直接在这里创建账户，无需先重启。</translation>
+    </message>
+    <message>
+        <source>Choose your username, password, computer name and region after installation.</source>
+        <translation>安装后设置用户名、密码、计算机名称和地区。</translation>
+    </message>
+    <message>
+        <source>Fedora DDE Remix</source>
+        <translation>Fedora DDE Remix</translation>
+    </message>
+    <message>
+        <source>Fedora Linux with the Deepin desktop environment.</source>
+        <translation>搭载 Deepin 桌面环境的 Fedora Linux。</translation>
+    </message>
+    <message>
+        <source>Installing Fedora DDE Remix</source>
+        <translation>正在安装 Fedora DDE Remix</translation>
+    </message>
+    <message>
+        <source>Keep this window open while the system is copied to your disk.</source>
+        <translation>系统正在复制到磁盘，请保持此窗口打开。</translation>
+    </message>
+    <message>
+        <source>Your account comes next</source>
+        <translation>接下来配置账户</translation>
+    </message>
+    <message>
+        <source>Your applications and settings, together in DDE.</source>
+        <translation>在 DDE 中使用应用并管理系统设置。</translation>
+    </message>
+</context>
+<context>
+    <name>RegionFormatFrame</name>
+    <message>
+        <source>Check your system settings</source>
+        <translation>请检查系统设置</translation>
+    </message>
+    <message>
+        <source>Close</source>
+        <translation>关闭</translation>
+    </message>
+    <message>
+        <source>Select a language, keyboard layout, time zone and regional format before continuing.</source>
+        <translation>继续前请选择语言、键盘布局、时区和地区格式。</translation>
+    </message>
+    <message>
+        <source>Set the language, keyboard layout, time zone and regional formats for the installed system</source>
+        <translation>为已安装的系统设置语言、键盘布局、时区和地区格式</translation>
+    </message>
+</context>
+<context>
+    <name>UserInfoFrame</name>
+    <message>
+        <source>Could not save account details</source>
+        <translation>无法保存账户信息</translation>
+    </message>
+    <message>
+        <source>OK</source>
+        <translation>确定</translation>
+    </message>
+    <message>
+        <source>The installer could not access its private configuration file. Account details have not been submitted.</source>
+        <translation>安装器无法访问其私有配置文件。账户信息尚未提交。</translation>
+    </message>
+    <message>
+        <source>The system is installed. Create your administrator account and computer name before restarting.</source>
+        <translation>系统已经安装。请在重启前创建管理员账户并设置计算机名称。</translation>
     </message>
 </context>
 </TS>

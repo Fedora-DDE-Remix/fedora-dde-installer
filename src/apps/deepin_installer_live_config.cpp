@@ -39,8 +39,8 @@ int main(int argc, char* argv[]) {
     DApplication::setAttribute(Qt::AA_Use96Dpi);
 
     DApplication app(argc, argv);
-    app.setApplicationDisplayName(::QObject::tr("Deepin Installer"));
-    app.setApplicationName("deepin-installer-live-config");
+    app.setApplicationDisplayName(::QObject::tr("Fedora DDE Remix Installer"));
+    app.setApplicationName("fedora-dde-installer-live-config");
 
     QFont font(app.font());
     // 设置的字体大小是跟随像素的
@@ -52,12 +52,12 @@ int main(int argc, char* argv[]) {
 
     DLogManager::registerConsoleAppender();
 
-    qInfo() << "deepin-installer version:" + CommonFunc::getVersion();
+    qInfo() << "fedora-dde-installer version:" + CommonFunc::getVersion();
 
     //install translate
     QTranslator translator;
     QString strLocale = CommonFunc::getSettingsString("DI_LOCALE");
-    QString tsFile = QString("%1/deepin-installer-%2.qm").arg(DI_I18N_DIR_ENV).arg(strLocale);
+    QString tsFile = QString("%1/fedora-dde-installer-%2.qm").arg(DI_I18N_DIR_ENV).arg(strLocale);
     translator.load(tsFile);
 
     ScreenMonitor screenMonitor;
@@ -72,7 +72,7 @@ int main(int argc, char* argv[]) {
     QObject::connect(&screenMonitor, &ScreenMonitor::screenReady, &w, [&w](){
         if (w.isHidden()) {
             w.setPluginSize();
-            w.loadPlugins("deepin_installer_live_config_plugins");
+            w.loadPlugins("fedora_dde_installer_live_config_plugins");
             w.setWindowFlag(Qt::WindowCloseButtonHint, false);
             w.showFullScreen();
         }

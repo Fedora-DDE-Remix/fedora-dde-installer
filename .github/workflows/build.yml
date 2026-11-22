@@ -1,0 +1,58 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  safe-tests:
+    name: Workflow and backend regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure without GUI dependencies
+        run: cmake -S . -B build-tests -DFEDORA_DDE_BUILD_GUI=OFF -DBUILD_TESTING=ON
+      - name: Build workflow tests
+        run: cmake --build build-tests --parallel 2
+      - name: Run non-destructive tests
+        run: ctest --test-dir build-tests --output-on-failure
+
+  fedora-rpm:
+    name: Fedora 45 RPM (x86_64)
+    runs-on: ubuntu-latest
+    container: fedora:45
+    timeout-minutes: 40
+    needs: safe-tests
+    steps:
+      - name: Install build tooling
+        run: dnf -y install git rpm-build cmake gcc-c++ ninja-build dnf5-plugins
+      - uses: actions/checkout@v4
+      - name: Enable the project's DDE packages
+        run: dnf -y copr enable mozixun/Fedora-DDE-Remix
+      - name: Install declared build dependencies
+        run: dnf -y builddep packaging/fedora-dde-installer.spec
+      - name: Build the current commit as source and binary RPMs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p rpmbuild/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          git archive --format=tar --prefix=fedora-dde-installer-main/ HEAD |
+            gzip -n > rpmbuild/SOURCES/fedora-dde-installer-main.tar.gz
+          rpmbuild --define "_topdir $PWD/rpmbuild" -ba packaging/fedora-dde-installer.spec
+      - name: Save RPMs
+        uses: actions/upload-artifact@v4
+        with:
+          name: fedora-dde-installer-fedora-45-x86_64
+          path: |
+            rpmbuild/RPMS/**/*.rpm
+            rpmbuild/SRPMS/*.rpm
+          if-no-files-found: error

@@ -47,9 +47,6 @@ const int gmainwindowwidthsmall =  700;
 const int gmainwindowheightsmall = 500;
 
 const QString gInstallModeDefault = "default";
-const QString gInstallModeAutoInstall = "auto-install";
-const QString gInstallModeNoFirstBoot = "no-first-boot";
-const QString gInstallModeAutoNoFirstBoot = "auto-no-first-boot";
 const QString gInstallModeAll = "all";
 
 const QString gInstallDirBeforeChroot = "hooks/before_chroot";
@@ -79,7 +76,7 @@ const QString gBackupLabel = "Backup";
 const QString gSWAPLabel = "SWAP";
 const QString gDataLabel = "_dde_data";
 const QString gHomeLabel = "_dde_home";
-const QStringList gNeedFormatMountPoints {"/", "/boot", "/persistent"};
+const QStringList gNeedFormatMountPoints {"/", "/boot"};
 
 const QString gCryptoLuksFileSystem = "crypto_luks";
 const QString gLVM2PVFileSystem = "lvm2 pv";
@@ -87,7 +84,7 @@ const QString gSwapMountPoint = "swap";
 const QString gLinuxSwapFileSystem = "linux-swap";
 const QStringList gSwapFileSystems = {gLinuxSwapFileSystem, "swap"};
 
-const QString gSystemLogDir = "/var/log/deepin-installer/";
+const QString gSystemLogDir = "/var/log/fedora-dde-installer/";
 
 const int gMBRMaxPartitionSize = 4;
 

@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QDebug>
+#include <QSaveFile>
 
 const quint64 BACKUP_RESERVESIZE = 500 * 1024 * 1024; //500Mib
 
@@ -620,16 +621,17 @@ bool PartitionOperateManager::writeConf(QString &err)
     QJsonDocument jsonDoc;
     jsonDoc.setArray(m_operateJsonArray);
 
-    QString str = CommonFunc::getSettingsString("DI_PARTITION_CONFIG");
-    QFile file(str);
-    file.remove();
-    if (!file.open(QIODevice::ReadWrite)) {
-        err = QString("%1 File open error. err:<%2>").arg(str, file.errorString());
+    const QString path = CommonFunc::getSettingsString("DI_PARTITION_CONFIG");
+    if (m_operateJsonArray.isEmpty() || path != "/run/fedora-dde-installer/partition-policy.json") {
+        err = QObject::tr("No reviewed partition plan is available.");
         return false;
     }
-
-    file.write(jsonDoc.toJson());
-    file.close();
+    QSaveFile file(path);
+    const QByteArray plan = jsonDoc.toJson();
+    if (!file.open(QIODevice::WriteOnly) || file.write(plan) != plan.size() || !file.commit()) {
+        err = QObject::tr("The reviewed partition plan could not be saved: %1").arg(file.errorString());
+        return false;
+    }
 
     printPartitions(m_currentDeviceInfo);
     printPartitions(m_currentLVMInfo);

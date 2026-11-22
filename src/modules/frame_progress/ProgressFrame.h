@@ -4,7 +4,6 @@
 #include "FramePluginInterface.h"
 
 class ProgressUpdateFrame;
-class ProgressSuccessFrame;
 class ProgressFailedFrame;
 class QStackedLayout;
 
@@ -23,15 +22,10 @@ private:
     void startInstall();
     void finished();
     void exitInstall(const QString &err);
-    void doRecord();
-    void updateInstallType(int &installType, bool &cryptSetup, bool &saveData, bool &lvmFullDisk);
-    void updateInstallTime(QString &installTime);
-    void updateSize(qint64 &rootSize, qint64 &swapSize);
-    void updateDiskType(QString &diskType);
 
 private:
     ProgressUpdateFrame *m_progressUpdateWidget = nullptr;
-    ProgressSuccessFrame *m_progressSuccessWidget = nullptr;
+    bool m_running = false;
     ProgressFailedFrame *m_progressFailedWidget = nullptr;
     QStackedLayout *m_mainLayout = nullptr;
 };

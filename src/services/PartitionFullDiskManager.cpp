@@ -234,11 +234,13 @@ QList<SPartitionInfo> PartitionFullDiskManager::getSystemPartitionConfig(const S
     // 分区的数量
     int partNumber = 1;
     // 磁盘的总大小
-    qint64 total = dev.byteSize - (CommonFunc::isUEFI() ? 66 : 4);
+    qint64 total = dev.byteSize - 2 * giDeviceUnitSize * giDeviceUnitSize;
 
     if (CommonFunc::isUEFI()) {
         SPartitionInfo efi = CommonFunc::getEFIPartitionInfo(dev);
         partInfos.append(efi);
+        total -= efi.byteSize;
+        ++partNumber;
     }
 
     QString currentPlatform = CommonFunc::getCurrentPlatform();
@@ -330,7 +332,7 @@ QList<SPartitionInfo> PartitionFullDiskManager::getHomePartitionConfig(const SDe
     // 分区的数量
     int partNumber = 1;
     // 磁盘的总大小
-    qint64 total = dev.byteSize - (CommonFunc::isUEFI() ? 66 : 4);
+    qint64 total = dev.byteSize - 2 * giDeviceUnitSize * giDeviceUnitSize;
 
     QString currentPlatform = CommonFunc::getCurrentPlatform();
     QString currentOSVersion = CommonFunc::getCurrentOsVersion();
@@ -590,268 +592,7 @@ qint64 PartitionFullDiskManager::defaultPartitionSize(const qint64 devSize, cons
     return reset;
 }
 
-void PartitionFullDiskManager::saveUserData()
-{
-    if (!m_systemDisk.device.isEmpty()) {
-        auto systemParts = PartitionOperateManager::instance()->getAvailableDeviceInfo().value(m_systemDisk);
-
-        for (SPartitionInfo &in : systemParts) {
-            // 写入一个任意标记，触发分区编辑操作，由后端保留用户数据类决定具体处理逻辑
-            if (in.label == gEFILabel) {
-                in.mountPoint = "/boot/efi";
-            } else if (in.label == gBootLabel) {
-                in.mountPoint = "/boot";
-            } else if (in.label == gRootLabel || in.label == gRootaLabel) {
-                in.mountPoint = "/";
-            } else if (in.label == gBackupLabel) {
-                in.mountPoint = "/recovery";
-            } else if (in.label == gSWAPLabel) {
-                in.mountPoint = "swap";
-            } else if (in.label == gDataLabel) {
-                in.mountPoint = CommonFunc::getSettingsString("DI_DATA_MOUNT_POINT_CONFIG", CommonFunc::getCurrentOsVersion());
-            }
-        }
-
-        m_systemDisk.isFormat = false;
-        PartitionOperateManager::instance()->updateDeviceInfo(m_systemDisk, systemParts);
-    }
-
-    if (!m_homeDisk.device.isEmpty()) {
-        auto dataParts = PartitionOperateManager::instance()->getAvailableDeviceInfo().value(m_homeDisk);
-        for (SPartitionInfo &in : dataParts) {
-            if (in.label == gHomeLabel) {
-                in.mountPoint = "/home";
-            }
-        }
-        m_homeDisk.isFormat = false;
-        PartitionOperateManager::instance()->updateDeviceInfo(m_homeDisk, dataParts);
-    }
-
-    // 处理lvm保留用户数据场景
-    QMap<SVGInfo, QList<SLVMInfo>> vgLvmInfos = PartitionOperateManager::instance()->getAvailableLVMInfo();
-    for (SVGInfo &vgInfoKey : vgLvmInfos.keys()) {
-        QList<SLVMInfo> lvmInfos = vgLvmInfos.value(vgInfoKey);
-        for (SLVMInfo &lvmInfoItem : lvmInfos) {
-            // 写入一个任意标记，触发分区编辑操作，由后端保留用户数据类决定具体处理逻辑
-            if (lvmInfoItem.label == gEFILabel) {
-                lvmInfoItem.mountPoint = "/boot/efi";
-            } else if (lvmInfoItem.label == gBootLabel) {
-                lvmInfoItem.mountPoint = "/boot";
-            } else if (lvmInfoItem.label == gRootLabel || lvmInfoItem.label == gRootaLabel) {
-                lvmInfoItem.mountPoint = "/";
-            } else if (lvmInfoItem.label == gBackupLabel) {
-                lvmInfoItem.mountPoint = "/recovery";
-            } else if (lvmInfoItem.label == gSWAPLabel) {
-                lvmInfoItem.mountPoint = "swap";
-            } else if (lvmInfoItem.label == gDataLabel) {
-                lvmInfoItem.mountPoint = CommonFunc::getSettingsString("DI_DATA_MOUNT_POINT_CONFIG", CommonFunc::getCurrentOsVersion());
-            }  else if (lvmInfoItem.label == gHomeLabel) {
-                lvmInfoItem.mountPoint = "/home";
-            }
-        }
-        PartitionOperateManager::instance()->updateLVMInfo(vgInfoKey, lvmInfos);
-    }
-}
-
-KeepDataError PartitionFullDiskManager::checkSaveUserData(QString &oldVersion)
-{
-    qInfo() << "check save user data:";
-    QString err;
-    auto &selectDisk = m_homeDisk.device.isEmpty() ? m_systemDisk : m_homeDisk;
-    bool bootloader = CommonFunc::isUEFI() ? selectDisk.type == EDisklabelType::GPT : selectDisk.type == EDisklabelType::MsDos;
-    if(!bootloader) {
-        return KeepDataError::BOOT_ERROR;
-    }
-
-    auto systemParts = PartitionOperateManager::instance()->getAvailableDeviceInfo().value(m_systemDisk);
-    QStringList devpathList;
-    //read partition list
-    for (auto &partInfo: systemParts) {
-        if(partInfo.path.isEmpty()) {
-            continue;
-        }
-
-        QStringList partpath;
-        // 需要找子节点的两种情况，这个分区是加密卷、这个分区是lvm pv
-        if(partInfo.filesystem == "crypto_LUKS") {
-            QJsonObject jsonInfo = CommonFunc::getPartitionInfo(partInfo.path, err);
-            if(!jsonInfo.contains("children") ||
-                jsonInfo["children"].toArray().isEmpty()) {
-                continue;
-            }
-
-            QJsonObject decryptChild = jsonInfo["children"].toArray().first().toObject();
-            if(decryptChild.isEmpty()) {
-                continue;
-            }
-
-            if(decryptChild["fstype"].toString() == "LVM2_member") {
-                //lvm，查找子节点
-                QJsonArray lvmChild = decryptChild["children"].toArray();
-                for (int i = 0; i < lvmChild.size(); ++i) {
-                    partpath.append(lvmChild.at(i).toObject().value("path").toString());
-                }
-            } else {
-                partpath.append(decryptChild["path"].toString());
-            }
-        } else if(partInfo.filesystem == "LVM2_member") {
-            QJsonObject jsonInfo = CommonFunc::getPartitionInfo(partInfo.path, err);
-            if(!jsonInfo.contains("children") || jsonInfo["children"].toArray().isEmpty()) {
-                continue;
-            }
-
-            QJsonArray lvmChild = jsonInfo["children"].toArray();
-            for (int i = 0; i < lvmChild.size(); ++i) {
-                partpath.append(lvmChild.at(i).toObject().value("path").toString());
-            }
-        } else {
-            partpath.append(partInfo.path);
-        }
-
-        devpathList.append(partpath);
-
-        if ((partInfo.label == "Roota") && !checkSaveUserDataOSVersionMatch(partInfo.path, oldVersion)) {
-            return KeepDataError::VERSION_MATCH_ERROR;
-        }
-    }
-    qInfo() << "check partition list:" << devpathList;
-
-    //find /etc/fstab
-    QString datauuid = findDataPartitionByFsTab(devpathList);
-    if(datauuid.isEmpty()) {
-        qWarning() << "no data uuid or home uuid find!";
-        return KeepDataError::OTHER_ERROR;
-    } else {
-        CommonFunc::command("mkdir", {"/tmp/data"}, err);
-        CommonFunc::command("mount", {QString("UUID=%1").arg(datauuid), "/tmp/data"}, err);
-        auto users = CommonFunc::findOldUsers("/tmp/data/home");  
-        if (!users.isEmpty()) {
-            CommonFunc::setSettingsValue("DI_OLD_USERNAME_LIST", users.join(";"));
-        }
-
-        CommonFunc::command("umount", {"/tmp/data"}, err);
-    }
-
-
-    qInfo() << "find data uuid or home uuid:" << datauuid;
-    //check data partition
-    bool bExists = checkPartitionInDevice(datauuid, selectDisk);
-    qInfo() << "save user data:" << m_homeDisk.device.isEmpty() << datauuid << bExists << bootloader;
-
-    return bExists ? KeepDataError::NO_ERROR : KeepDataError::OTHER_ERROR;
-}
-
-QString PartitionFullDiskManager::findDataPartitionByFsTab(const QStringList &partList)
-{
-    QString err;
-    QString datauuid;
-    QString dataMountPoint = CommonFunc::getSettingsString("DI_DATA_MOUNT_POINT_CONFIG", CommonFunc::getCurrentOsVersion());
-    QString tmp = "/datacheck";
-    CommonFunc::command("mkdir", {tmp}, err);
-    QString etcDirPath = tmp + "/ostree/data";
-    for (auto &devpath: partList) {
-        if(!CommonFunc::mount(devpath, tmp, "", err)) {
-            qWarning() << "mount failed:" << err;
-            continue;
-        }
-
-        QDir dir(etcDirPath);
-        dir.setFilter(QDir::AllDirs);
-        QStringList dirNameList = dir.entryList();
-        QString tabFile = etcDirPath + "/%1/checkout/etc/fstab";
-        QStringList::iterator findDirIter = std::find_if(dirNameList.begin(), dirNameList.end(), [=](const QString &dirName){
-            return QFileInfo::exists( tabFile.arg(dirName));
-        });
-
-        if(findDirIter != dirNameList.end()) {
-            tabFile = tabFile.arg(*findDirIter);
-            qInfo() << "find fstab, try to check";
-            QList<FSTabInfo> tabList;
-            CommonFunc::readFSTab(tabFile, tabList);
-
-            auto iter = std::find_if(tabList.begin(), tabList.end(), [&](const FSTabInfo &info){
-                return info.spec.startsWith("UUID") && (info.mountPoint == "/persistent/home" || info.mountPoint == "/home");
-            });
-
-            if (iter == tabList.end()) {
-                iter = std::find_if(tabList.begin(), tabList.end(), [&](const FSTabInfo &info) {
-                    return info.spec.startsWith("UUID") && info.mountPoint == dataMountPoint;
-                });
-            }
-
-            if(iter != tabList.end()) {
-                if(iter->spec.startsWith("UUID")) {
-                    datauuid = iter->spec.mid(iter->spec.indexOf('=') + 1).trimmed();
-                }
-            }
-
-            if(!datauuid.isEmpty()) {
-                CommonFunc::umount(tmp, err);
-                break;
-            }
-        }
-
-        CommonFunc::umount(tmp, err);
-    }
-
-    return datauuid;
-}
-
-bool PartitionFullDiskManager::checkPartitionInDevice(const QString &uuid, const SDeviceInfo &dev)
-{
-    bool bExists = false;
-    QString output;
-    auto devList = PartitionOperateManager::instance()->getAvailableDevice();
-    int index = devList.indexOf(dev);
-    if(index != -1) {
-        QString cmd = QString("lsblk -lnfp %1 | grep %2").arg(devList.at(index).device).arg(uuid);
-        qInfo() << "check device:" << cmd;
-        bExists = CommonFunc::command("/bin/bash", {"-c", cmd}, output);
-    }
-
-    return bExists;
-}
-
 bool PartitionFullDiskManager::isMultipleDiskToVg(const SDeviceInfo &devName, QMap<QString, QString> &text)
 {
     return PartitionOperateManager::instance()->isMultipleDiskToVg(devName, text);
-}
-
-bool PartitionFullDiskManager::checkSaveUserDataOSVersionMatch(const QString &devPath, QString &oldVersion)
-{
-    QString err;
-    QString tmp = "/rootcheck";
-    QString osVersionPath = "/etc/lsb-release";
-    bool isVersionMatch = false;
-    QString curVersion = "V" + CommonFunc::getSettingsString("DISTRIB_RELEASE", "", osVersionPath);
-    CommonFunc::command("mkdir", {tmp}, err);
-
-    if(!CommonFunc::mount(devPath, tmp, "", err)) {
-        qWarning() << "mount failed:" << err;
-        return isVersionMatch;
-    }
-
-    QString versionFile = tmp + osVersionPath;
-
-    // 检查/etc/lsb-release是否为软链接
-    QFileInfo fileInfo(versionFile);
-    if (fileInfo.isSymLink()) {
-        qInfo() << "/etc/lsb-release is a symlink, trying /usr/share/deepin-desktop-base/lsb-release";
-        versionFile = tmp + "/usr/share/deepin-desktop-base/lsb-release";
-    }
-    
-    if(QFile::exists(versionFile)) {
-        oldVersion = "V" + CommonFunc::getSettingsString("DISTRIB_RELEASE", "", versionFile);
-        qInfo() << "the old os version is: " << oldVersion;
-        qInfo() << "the current os version is: " << curVersion;
-        isVersionMatch = (oldVersion == curVersion);
-    }
-
-    CommonFunc::umount(tmp, err);
-
-    if (oldVersion.isEmpty()) {
-        oldVersion = "V20";
-    }
-
-    return isVersionMatch;
 }

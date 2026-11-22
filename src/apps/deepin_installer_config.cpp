@@ -24,6 +24,8 @@
 #include <QSettings>
 #include <QFile>
 #include <QFileInfo>
+#include <sys/stat.h>
+#include <cstdlib>
 
 
 QString getSystemEnv(const QString &key)
@@ -58,12 +60,7 @@ bool isPxeInstall()
 
 QString getCurrentOsType()
 {
-    QSettings settings("/etc/deepin-version", QSettings::IniFormat);
-    settings.beginGroup("Release");
-
-    QString type = settings.value("Type", "Desktop").toString();
-    settings.endGroup();
-    return type;
+    return QStringLiteral("Fedora");
 }
 
 QString getCurrentPlatform()
@@ -83,48 +80,24 @@ QString getCurrentPlatform()
 }
 
 
-void initConfig(const QString &filePath)
+bool initConfig(const QString &filePath)
 {
-    if (QFile::exists(filePath)) {
-        QFile::remove(filePath);
-    }
-
-    // Read default settings
-    QString defaultSettings = QString("%1/%2/%3").arg(getSystemEnv(DI_CONFIG_DIR_ENV), "settings", "default_settings.ini");
-    QString overrideSettings = QString("%1/os/%2/%3.ini").arg(getSystemEnv(DI_CONFIG_DIR_ENV), getCurrentOsType(), getCurrentPlatform());
-    QString oemSettings = QString("%1/oem/settings.ini").arg(getSystemEnv(DI_LIVE_DIR_ENV));
-    QString extraSettings = QString("%1/pxemode/settings.ini").arg(getSystemEnv(DI_LIVE_DIR_ENV));
-    QString pxeSettings = QString("%1/pxemode/settings.ini-pxe").arg(getSystemEnv(DI_LIVE_DIR_ENV));
-    QString debugSettings = QString("/tmp/oem/settings.ini");
-
-    qInfo() << "defaultSettings = " << defaultSettings;
-    qInfo() << "overrideSettings = " << overrideSettings;
-    qInfo() << "oemSettings = " << oemSettings;
-    qInfo() << "extraSettings = " << extraSettings;
-    qInfo() << "pxeSettings = " << pxeSettings;
-    QStringList settingsList{defaultSettings, overrideSettings, oemSettings, extraSettings, debugSettings};
-    if (isPxeInstall()) {
-        settingsList << pxeSettings;
-    }
-    for (const QString& file : settingsList) {
-        if (!QFile::exists(file)) {
-            qWarning() << "file not exist. " << file;
-            continue;
-        }
-
-        qInfo() << "init config: " << file;
-        QSettings settings(file, QSettings::IniFormat);
-        for (const QString& key : settings.allKeys()) {
-            if ( "DI_DEEPIN_SQUASHFS_VERIFY" == key  && file != defaultSettings) {
-                continue;
-            }
-            QSettings(filePath, QSettings::IniFormat).setValue(key, settings.value(key));
-        }
-    }
+    const QString defaults = getSystemEnv(DI_CONFIG_DIR_ENV) + "/settings/default_settings.ini";
+    if (!QFileInfo::exists(defaults))
+        return false;
+    QSettings source(defaults, QSettings::IniFormat);
+    QSettings destination(filePath, QSettings::IniFormat);
+    destination.clear();
+    for (const QString &key : source.allKeys())
+        destination.setValue(key, source.value(key));
+    destination.sync();
+    return source.status() == QSettings::NoError && destination.status() == QSettings::NoError
+            && QFile::setPermissions(filePath, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 }
 
-QString getSettingsString(const QString &key, const QString &section, const QString &filePath)
+QString getSettingsString(const QString &key, const QString &section, const QString &filePath, bool &ok)
 {
+    ok = false;
     QString path(filePath);
 
     if (!path.isEmpty() && !QFileInfo::exists(path)) {
@@ -152,16 +125,18 @@ QString getSettingsString(const QString &key, const QString &section, const QStr
         settings.endGroup();
     }
 
+    settings.sync();
+    ok = settings.status() == QSettings::NoError && QFileInfo(path).isReadable();
     return value;
 }
 
-void setSettingsString(const QString &key, const QString &value, const QString &section, const QString &filePath)
+bool setSettingsString(const QString &key, const QString &value, const QString &section, const QString &filePath)
 {
     QString path(filePath);
 
     if (!path.isEmpty() && !QFileInfo::exists(path)) {
         qWarning() << "file not exist." << path;
-        return;
+        return false;
     }
 
     if (path.isEmpty()) {
@@ -170,7 +145,7 @@ void setSettingsString(const QString &key, const QString &value, const QString &
 
     if (!QFileInfo::exists(path)) {
         qWarning() << "file not exist." << path;
-        return;
+        return false;
     }
 
     QSettings settings(path, QSettings::IniFormat);
@@ -181,14 +156,17 @@ void setSettingsString(const QString &key, const QString &value, const QString &
         settings.setValue(key, value);
         settings.endGroup();
     }
+    settings.sync();
+    return settings.status() == QSettings::NoError;
 }
 
 
 
 int main(int argc, char* argv[]) {
+    umask(0077);
     // init DApplication
     QCoreApplication app(argc, argv);
-    app.setApplicationName("deepin-installer");
+    app.setApplicationName("fedora-dde-installer");
 
     // init app
     QCommandLineParser parser;
@@ -218,15 +196,15 @@ int main(int argc, char* argv[]) {
     // QSettings内置了一个General组用于写特殊信息，如果想自己创建General组，那因为与内置的冲突了，QSettings把自定义的General处理成%General。
     // 读写时不指定group，操作的就是真正的General段。
     if (command == gInstallConfigInit) {
-        // deepin-installer-config init ini-file
+        // fedora-dde-installer-config init ini-file
         if (args.size() != 2) {
             // Show help and exit
             parser.showHelp(-1);
         }
 
-        initConfig(args.at(1));
+        return initConfig(args.at(1)) ? EXIT_SUCCESS : EXIT_FAILURE;
     } else if (command == gInstallConfigGet) {
-        // deepin-installer-config get ini-file [section] key
+        // fedora-dde-installer-config get ini-file [section] key
         if (args.size() < 3 || args.size() > 4) {
             parser.showHelp(-1);
         }
@@ -239,9 +217,13 @@ int main(int argc, char* argv[]) {
             key = args.at(3);
         }
 
-        std::cout << getSettingsString(key, section, args.at(1)).toStdString();
+        bool ok = false;
+        const QString value = getSettingsString(key, section, args.at(1), ok);
+        if (!ok)
+            return EXIT_FAILURE;
+        std::cout << value.toStdString();
     } else if (command == gInstallConfigSet) {
-        // deepin-installer-config set ini-file [section] key value
+        // fedora-dde-installer-config set ini-file [section] key value
         if (args.size() < 4 || args.size() > 5) {
             parser.showHelp(-1);
         }
@@ -256,7 +238,7 @@ int main(int argc, char* argv[]) {
             value = args.at(4);
         }
 
-        setSettingsString(key, value, section, args.at(1));
+        return setSettingsString(key, value, section, args.at(1)) ? EXIT_SUCCESS : EXIT_FAILURE;
     }
 
     return 0;

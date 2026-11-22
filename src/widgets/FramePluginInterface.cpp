@@ -19,6 +19,7 @@ extern const QString gFramePartition = "DeepinInstaller_Partition";
 extern const QString gFrameUserInfo = "DeepinInstaller_UserInfo";
 extern const QString gFramePrepare = "DeepinInstaller_Prepare";
 extern const QString gFrameInstall = "DeepinInstaller_Install";
+extern const QString gFrameConfigure = "FedoraDDEInstaller_Configure";
 extern const QString gFrameApplication = "DeepinInstaller_Application";
 
 
@@ -147,14 +148,9 @@ void FramePluginInterface::initTitleButton()
 
 void FramePluginInterface::quitInstaller()
 {
+    if (!CommonFunc::installWorkflow().canChangePartitions())
+        return;
     QuitInstallDialog quitDialog;
-    if (quitDialog.exec() == QDialog::Accepted) {
-        qInfo() << "quit installer...";
-#ifdef QT_DEBUG
-        QCoreApplication::exit(0);
-#else
-        return CommonFunc::shutdownSystem();
-#endif // QT_DEBUG
-    }
+    if (quitDialog.exec() == QDialog::Accepted)
+        QCoreApplication::quit();
 }
-

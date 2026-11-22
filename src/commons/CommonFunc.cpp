@@ -70,53 +70,31 @@ QStringList CommonFunc::getDirs(const QString &dir, const QStringList &nameFilte
     return reset;
 }
 
-QString CommonFunc::getInstallStatus(int sta)
+QString CommonFunc::getInstallStatus(int progress)
 {
-    QMap<int, QString> status = { {0, ::QObject::tr("Preparing...")},
-                                  {1, ::QObject::tr("Partitioning...")},
-                                  {10, ::QObject::tr("Decompressing files...")},
-                                  {60, ::QObject::tr("Installing system...")},
-                                  {80, ::QObject::tr("Initial backup in progress...")},
-                                  {50, ::QObject::tr("Configuring system...")},
-                                  {95, ::QObject::tr("Installing uimg files...")},
-                                  {100, ::QObject::tr("Finishing installation...")}};
-
-    return status.value(sta);
+    if (progress >= 100)
+        return QObject::tr("System installed; account setup is next...");
+    if (progress >= 90)
+        return QObject::tr("Preparing account setup...");
+    if (progress >= 85)
+        return QObject::tr("Finishing system configuration...");
+    if (progress >= 60)
+        return QObject::tr("Installing the bootloader and system settings...");
+    if (progress >= 10)
+        return QObject::tr("Copying system files...");
+    if (progress >= 1)
+        return QObject::tr("Partitioning...");
+    return QObject::tr("Preparing...");
 }
 
 void CommonFunc::initConfig(const QString &filePath)
 {
-    // Read default settings
-    QString defaultSettins = QString("%1/%2/%3").arg(getSystemEnv(DI_CONFIG_DIR_ENV), "settings", "default_settings.ini");
-    QString overrideSettings = QString("%1/os/%2/%3.ini").arg(getSystemEnv(DI_CONFIG_DIR_ENV), getCurrentOsType(), getCurrentPlatform());
-    QString oemSettings = QString("%1/oem/settings.ini").arg(getSystemEnv(DI_LIVE_DIR_ENV));
-    QString extraSettings = QString("%1/pxemode/settings.ini").arg(getSystemEnv(DI_LIVE_DIR_ENV));
-    QString pxeSetings = QString("%1/pxemode/settings.ini-pxe").arg(getSystemEnv(DI_LIVE_DIR_ENV));
-
-    qInfo() << "defaultSettins = " << defaultSettins;
-    qInfo() << "overrideSettings = " << overrideSettings;
-    qInfo() << "oemSettings = " << oemSettings;
-    qInfo() << "extraSettings = " << extraSettings;
-    qInfo() << "pxeSetings = " << pxeSetings;
-    QStringList settingsList{defaultSettins, overrideSettings, oemSettings, extraSettings};
-    if (isPxeInstall()) {
-        settingsList << pxeSetings;
-    }
-    for (const QString& file : settingsList) {
-        if (!QFile::exists(file)) {
-            qWarning() << "file not exist. " << file;
-            continue;
-        }
-
-        qInfo() << "init config: " << file;
-        QSettings settings(file, QSettings::IniFormat);
-        for (const QString& key : settings.allKeys()) {
-            if ( "DI_DEEPIN_SQUASHFS_VERIFY" == key  && file != defaultSettins) {
-                continue;
-            }
-            QSettings(filePath, QSettings::IniFormat).setValue(key, settings.value(key));
-        }
-    }
+    const QString defaultSettings = getSystemEnv(DI_CONFIG_DIR_ENV) + "/settings/default_settings.ini";
+    QSettings source(defaultSettings, QSettings::IniFormat);
+    QSettings destination(filePath, QSettings::IniFormat);
+    for (const QString &key : source.allKeys())
+        destination.setValue(key, source.value(key));
+    destination.sync();
 }
 
 QStack<SPluginInfo> CommonFunc::getPlugins(const QString &jsonName)
@@ -127,11 +105,6 @@ QStack<SPluginInfo> CommonFunc::getPlugins(const QString &jsonName)
     QString defaultConfig = QString("%1/settings/%2.json").arg(CommonFunc::getSystemEnv(DI_CONFIG_DIR_ENV), jsonName);
     if (QFileInfo::exists(defaultConfig)) {
         config = defaultConfig;
-    }
-
-    QString oemConfig = QString("%1/oem/%2.json").arg(CommonFunc::getSystemEnv(DI_LIVE_DIR_ENV), jsonName);
-    if (QFileInfo::exists(oemConfig)) {
-        config = oemConfig;
     }
 
     QString err;
@@ -479,34 +452,15 @@ LanguageList CommonFunc::getLanguageList()
   return list;
 }
 
+InstallWorkflow &CommonFunc::installWorkflow()
+{
+    static InstallWorkflow workflow;
+    return workflow;
+}
+
 QString CommonFunc::getSystemLogo()
 {
-    QString url;
-    OSType type = getCurrentOs();
-    switch (type) {
-        case OSType::Community:
-            url = ":/images/deepin.svg";
-            break;
-        case OSType::Professional:
-            url = ":/images/uos.svg";
-            break;
-        case OSType::Server:
-            url = ":/images/uos.svg";
-            break;
-        case OSType::Personal:
-            url = ":/images/uos.svg";
-            break;
-        case OSType::Device:
-            url = ":/images/uos.svg";
-            break;
-        case OSType::Military:
-            url = ":/images/uos.svg";
-            break;
-        case OSType::Education:
-            url = ":/images/uos_e.svg";
-            break;
-    }
-    return url;
+    return QStringLiteral(":/images/fedora-dde-remix.png");
 }
 
 QString CommonFunc::getMainGifAnimations()
@@ -525,92 +479,22 @@ QString CommonFunc::getMainGifAnimations()
 
 QStringList CommonFunc::getMainAnimations()
 {
-    QString oemConfig = QString("%1/oem/slides/mains").arg(getSystemEnv(DI_LIVE_DIR_ENV));
-    if (!getDirs(oemConfig).isEmpty()) {
-        return getDirs(oemConfig);
-    }
-
-    QString strver = getCurrentOsVersion();
-#ifdef QT_DEBUG
-    QString mainBgPic = "slides/" + strver + "/mains";
-#else
-    QString mainBgPic = "slides/mains";
-#endif
-
-    QString defaultConfig = QString("%1/%2").arg(getSystemEnv(DI_CONFIG_DIR_ENV), mainBgPic);
-    return getDirs(defaultConfig);
+    return getDirs(getSystemEnv(DI_CONFIG_DIR_ENV) + "/slides/Fedora/mains");
 }
 
 QStringList CommonFunc::getInstallAnimations()
 {
-    auto currentOsType = getCurrentOsType();
-    //教育版没有提供轮播图，暂时使用专业版的轮播图
-    if (currentOsType == "E" || currentOsType == "Military") {
-        currentOsType = "Professional";
-    }
-
-    QString osVersion = getCurrentOsVersion();
-
-    if(osVersion == "V23" || osVersion == "V25") {
-        currentOsType = "Default";
-        QString oemConfig = QString("%1/%2").arg(getSystemEnv(DI_LIVE_DIR_ENV), "oem/slides/installs");
-        if (!getDirs(oemConfig).isEmpty()) {
-            return getDirs(oemConfig);
-        }
-
-#ifdef QT_DEBUG
-        QString slidePath = "slides/" + osVersion+ "/installs";
-#else
-        QString slidePath = "slides/installs";
-#endif
-
-        QString localeConfig = QString("%1/%2/%3").arg(getSystemEnv(DI_CONFIG_DIR_ENV), slidePath, currentOsType);
-        if (!getDirs(localeConfig).isEmpty()) {
-            return getDirs(localeConfig);
-        }
-    }
-    return QStringList();
-
+    return getDirs(getSystemEnv(DI_CONFIG_DIR_ENV) + "/slides/Fedora/installs");
 }
 
 QStringList CommonFunc::getConfigAnimations()
 {
-    QString oemConfig = QString("%1/%2/%3").arg(getSystemEnv(DI_LIVE_DIR_ENV), "oem/slides/configs", getSettingsString("DI_LOCALE"));
-    if (!getDirs(oemConfig).isEmpty()) {
-        return getDirs(oemConfig);
-    }
-
-    QString localeConfig = QString("%1/%2/%3/%4").arg(getSystemEnv(DI_CONFIG_DIR_ENV), "slides/configs", getSettingsString("DI_LOCALE"));
-    if (!getDirs(localeConfig).isEmpty()) {
-        return getDirs(localeConfig);
-    }
-
-    QString defaultConfig = QString("%1/%2/%3/%4").arg(getSystemEnv(DI_CONFIG_DIR_ENV), "slides/configs/defaults");
-    if (!getDirs(defaultConfig).isEmpty()) {
-        return getDirs(defaultConfig);
-    }
-
-    return QStringList();
+    return getDirs(getSystemEnv(DI_CONFIG_DIR_ENV) + "/slides/Fedora/configs");
 }
 
 QString CommonFunc::getPartitionPolicy()
 {
-    QString oemConfig = QString("%1/oem/full_disk_policy.json").arg(getSystemEnv(DI_LIVE_DIR_ENV));
-    if (QFileInfo::exists(oemConfig)) {
-        return oemConfig;
-    }
-
-    QString osConfig = QString("%1/%2/full_disk_policy_%3.json").arg(getSystemEnv(DI_CONFIG_DIR_ENV), "settings", getCurrentOsType());
-    if (QFileInfo::exists(osConfig)) {
-        return osConfig;
-    }
-
-    QString defaultConfig = QString("%1/%2/full_disk_policy.json").arg(getSystemEnv(DI_CONFIG_DIR_ENV), "settings");
-    if (QFileInfo::exists(defaultConfig)) {
-        return defaultConfig;
-    }
-
-    return QString();
+    return getSystemEnv(DI_CONFIG_DIR_ENV) + "/settings/full_disk_policy.json";
 }
 
 double CommonFunc::mToG(qint64 size)
@@ -787,94 +671,36 @@ QString CommonFunc::getCurrentPlatform()
 
 QString CommonFunc::getCurrentOsType()
 {
-    QSettings settings("/etc/deepin-version", QSettings::IniFormat);
-    settings.beginGroup("Release");
-
-    QString type = settings.value("Type", "Desktop").toString();
-    settings.endGroup();
-    return type;
+    return QStringLiteral("Fedora");
 }
 
 QString CommonFunc::getCurrentOsVersion()
 {
-#ifdef QT_DEBUG
-    return "V25";
-#else
-    return getSystemEnv(DI_OS_VERSION_ENV);
-#endif
+    QSettings release("/etc/os-release", QSettings::IniFormat);
+    return release.value("VERSION_ID", "45").toString().remove('"');
 }
 
 QString CommonFunc::getVersion()
 {
-#ifdef QT_DEBUG
-    QString print = "7.0.0";
-#else
-    QString print = "";
-    CommonFunc::command("dpkg", QStringList() << "-s" << "deepin-installer", print);
-    const QStringList lines = print.split('\n');
-    for (const QString line : lines) {
-        const QStringList list = qstringSplitToQStringList(line, ":");
-        if (QString::compare(list.at(0), "Version", Qt::CaseInsensitive) == 0) {
-            return list.at(1);
-        }
-    }
-#endif // QT_DEBUG
-    return  print;
+    QString version;
+    if (command("rpm", {"-q", "--qf", "%{VERSION}-%{RELEASE}", "fedora-dde-installer"}, version))
+        return version.trimmed();
+    return QStringLiteral("development");
 }
 
 OSType CommonFunc::getCurrentOs()
 {
-    const QString& type = getCurrentOsType();
-
-    return QMap<QString, OSType>{
-        { "Desktop", OSType::Community },
-        { "Professional", OSType::Professional },
-        { "Server", OSType::Server },
-        { "Personal", OSType::Personal },
-        { "Device", OSType::Device },
-        {"E", OSType::Education},
-        {"Military", OSType::Military}
-    }.value(type);
+    return OSType::Community;
 }
 
 QString CommonFunc::isNameDeepin()
 {
-    if (OSType::Community == getCurrentOs()) {
-        return "deepin";
-    }
-    return "UOS";
+    return QStringLiteral("Fedora DDE Remix");
 }
 
-bool CommonFunc::getSettingsPolicy(QJsonDocument &policyDoc, QString &err)
+bool CommonFunc::getSettingsPolicy(QJsonDocument &policyDoc, QString &error)
 {
-    QString config = "";
-
-    QString defaultConfig = QString("%1/settings/full_disk_policy.json").arg(getSystemEnv(DI_CONFIG_DIR_ENV));
-    if (QFileInfo::exists(defaultConfig)) {
-        config = defaultConfig;
-    }
-
-    QString osConfig = QString("%1/settings/full_disk_policy_%2.json").arg(getSystemEnv(DI_CONFIG_DIR_ENV),
-                                                                           getCurrentOsType());
-    if (QFileInfo::exists(osConfig)) {
-        config = osConfig;
-    }
-
-    QString oemConfig = QString("%1/oem/full_disk_policy.json").arg(getSystemEnv(DI_LIVE_DIR_ENV));
-    if (QFileInfo::exists(oemConfig)) {
-        config = oemConfig;
-    }
-
-    QString ghostPartPolicyConfig = getSettingsString("DI_PART_POLICY_FILE");
-    if (!ghostPartPolicyConfig.isEmpty() && QFileInfo::exists(ghostPartPolicyConfig)) {
-        config = ghostPartPolicyConfig;
-    }
-
-    if (!CommonFunc::readJsonFile(config, policyDoc, err)) {
-        return false;
-    }
-
-    return true;
+    return readJsonFile(getPartitionPolicy(), policyDoc, error);
 }
 
 bool CommonFunc::execHook(const QString &hooksPath, QString &log)
@@ -1031,19 +857,9 @@ bool CommonFunc::isGhost()
     return getSettingsBool("DI_IS_GHOST_MODE");
 }
 
-bool CommonFunc::isAuotInstall()
-{
-    QString installMode = CommonFunc::getSettingsString("DI_INSTALL_MODE");
-    if (QStringList{gInstallModeAutoInstall, gInstallModeAutoNoFirstBoot}.contains(installMode)) {
-        return true;
-    }
-    return false;
-}
-
 bool CommonFunc::isFirstBoot()
 {
-    QString installMode = getSettingsString("DI_INSTALL_MODE");
-    return  QStringList{gInstallModeDefault, gInstallModeAutoInstall}.contains(installMode);
+    return false;
 }
 
 bool CommonFunc::checkDisklabelType(const SDeviceInfo &deviceinfo)
@@ -1228,7 +1044,7 @@ bool CommonFunc::editPartition(SPartitionInfo &info, QString &err)
 
     // 编辑分区
     if (info.partitionType == EPartitionType::PartitionTypeExtension) {
-        QString cmd = QString("deepin-installer-parted-util %1 %2 %3 %4 %5")
+        QString cmd = QString("fedora-dde-installer-parted-util %1 %2 %3 %4 %5")
                 .arg(info.device)
                 .arg(info.path)
                 .arg("extended")
@@ -2176,15 +1992,7 @@ bool CommonFunc::oemHasConfigEntry(const QString &entry)
 
 QStringList CommonFunc::getPartitionMountPoints(const SLVMInfo &free)
 {
-    QString osVersion = CommonFunc::getCurrentOsVersion();
-    QStringList reset;
-    if (CommonFunc::getSettingsBool("DI_NO_IMMUTABLE_INSTALL")) {
-        reset = qstringSplitToQStringList("/;/boot;/home;/tmp;/var;/srv;/opt;/usr/local", ";");
-    } else if (osVersion == "V20") {
-        reset = getSettingsStringList("DI_PARTITION_MOUNT_POINT_CONFIG");
-    } else {
-        reset = getSettingsStringList("DI_PARTITION_MOUNT_POINT_CONFIG", osVersion);
-    }
+    QStringList reset = {"/", "/boot", "/home", "/tmp", "/var", "/srv", "/opt", "/usr/local"};
 
     qint64 rootASize = CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG");
     if (free.size < rootASize &&
@@ -2200,15 +2008,7 @@ QStringList CommonFunc::getPartitionMountPoints(const SLVMInfo &free)
 
 QStringList CommonFunc::getPartitionMountPoints(const SPartitionInfo &free)
 {
-    QString osVersion = CommonFunc::getCurrentOsVersion();
-    QStringList reset;
-    if (CommonFunc::getSettingsBool("DI_NO_IMMUTABLE_INSTALL")) {
-        reset = qstringSplitToQStringList("/;/boot;/home;/tmp;/var;/srv;/opt;/usr/local", ";");
-    } else if (osVersion == "V20") {
-        reset = getSettingsStringList("DI_PARTITION_MOUNT_POINT_CONFIG");
-    } else {
-        reset = getSettingsStringList("DI_PARTITION_MOUNT_POINT_CONFIG", osVersion);
-    }
+    QStringList reset = {"/", "/boot", "/home", "/tmp", "/var", "/srv", "/opt", "/usr/local"};
 
     if (isUEFI()) {
         reset.append("/boot/efi");
@@ -2569,26 +2369,16 @@ bool CommonFunc::isFullDiskbyFSTab(const QList<FSTabInfo> &tabList)
     return hasRecovery && hasData;
 }
 
-void CommonFunc::rebootSystem()
+bool CommonFunc::rebootSystem()
 {
-    QFile file("/proc/sysrq-trigger");
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        QTextStream text_stream(&file);
-        text_stream << "b";
-        text_stream.flush();
-        file.close();
-    } else {
-        QString log;
-        command("/bin/bash", {"-c", "reboot"}, log);
+    if (!installWorkflow().canRestart())
+        return false;
+    QString error;
+    if (!command("/usr/bin/systemctl", {"reboot"}, error)) {
+        qWarning() << "Unable to request restart:" << error;
+        return false;
     }
-}
-
-void CommonFunc::shutdownSystem()
-{
-    QString log;
-    if (!command("/bin/bash", {"-c", "/sbin/shutdown -h now"}, log)) {
-         command("/bin/bash", {"-c", "systemctl poweroff"}, log);
-    }
+    return true;
 }
 
 SPartitionInfo CommonFunc::getEFIPartitionInfo(const SDeviceInfo &dev)
@@ -2706,7 +2496,7 @@ QString CommonFunc::getPartitionLabel(const SPartitionInfo &part)
         }
     }
     else if (part.mountPoint == "/") {
-        label = CommonFunc::getSettingsBool("DI_IMMUTABLE_SYSTEM") ? gRootaLabel : gRootLabel;
+        label = gRootLabel;
 
     } else if (part.mountPoint == "/boot") {
         label = gBootLabel;
@@ -2774,7 +2564,7 @@ QString CommonFunc::getPartitionLabel(const SLVMInfo &part)
         }
     }
     else if (part.mountPoint == "/") {
-        label = CommonFunc::getSettingsBool("DI_IMMUTABLE_SYSTEM") ? gRootaLabel : gRootLabel;
+        label = gRootLabel;
 
     } else if (part.mountPoint == "/boot") {
         label = gBootLabel;
@@ -3061,7 +2851,7 @@ bool CommonFunc::isInDesktop()
     QFile file(lightdmConfPath);
     if (file.open(QIODevice::Text | QIODevice::ReadOnly)) {
         QByteArray fileContent = file.readAll();
-        bool hasInstaller = fileContent.contains("deepin-installer");
+        bool hasInstaller = fileContent.contains("fedora-dde-installer");
         file.close();
         return hasInstaller;
     } else {
@@ -3071,14 +2861,6 @@ bool CommonFunc::isInDesktop()
 
 }
 
-bool CommonFunc::canImmutableSystem()
-{
-#ifdef QT_DEBUG
-    return true;
-#else
-    return getCurrentOsVersion() == "V25" &&  (QFile::exists("/ostree/repo") || QFile::exists("/sysroot/ostree/repo"));
-#endif
-}
 
 void CommonFunc::setRecoveryKey()
 {

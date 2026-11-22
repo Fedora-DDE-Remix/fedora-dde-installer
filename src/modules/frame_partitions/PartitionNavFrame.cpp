@@ -26,27 +26,12 @@
 
 static const QString SENIOR_FRAME = "SENIORFRAME";
 static const QSize GHOST_TIPSIZE = QSize(20, 20);
-static const QStringList NO_IMMUTABLE_PROFILE_KEYS = {
-    "DI_IMMUTABLE_SYSTEM",
-    "DI_PART_POLICY_FILE",
-    "DI_SAVE_USER_DATA_LOAD",
-    "DI_IS_SAVE_AUTHORIZED_DATA_CONFIG",
-    "DI_IS_INIT_RECOVERY",
-    "DI_VALID_DEVICE_MIN_SIZE_CONFIG",
-    "DI_DEVICE_MIN_SIZE_CONFIG",
-    "DI_BOOT_SIZE_CONFIG",
-    "DI_ROOTA_SIZE_CONFIG",
-    "DI_SWAP_MAX_SIZE_CONFIG",
-    "DI_PERSISTENT_SIZE_CONFIG",
-    "DI_DATA_MIN_SIZE_CONFIG"
-};
 
 PartitionNavFrame::PartitionNavFrame(QWidget *parent):
     FramePluginInterface (parent)
 {
     m_uimgCheckResult.result = false;
     m_frameName = gFramePartition;
-    cacheInstallProfileDefaults();
     //分区界面回退按钮特殊处理
     m_backBnt->disconnect(SIGNAL(clicked()));
     m_centerWidget = new QStackedWidget(this);
@@ -88,14 +73,10 @@ PartitionNavFrame::PartitionNavFrame(QWidget *parent):
     m_partLabel = new DLabel;
     m_partLabel->setFixedWidth(gpartitionBntWidth);
     DFontSizeManager::instance()->bind(m_partLabel, DFontSizeManager::T6, QFont::DemiBold);
-    m_noImmutableCheckBox = new DCheckBox(this);
-    m_noImmutableCheckBox->setFixedWidth(gpartitionBntWidth);
-    m_noImmutableCheckBox->setVisible(isNoImmutableOptionAvailable());
     QVBoxLayout *optionButtonLayout = new QVBoxLayout;
     optionButtonLayout->setSpacing(CommonFunc::isBigScreen() ? gitemSpacing : glayoutSpacing);
     optionButtonLayout->setContentsMargins(0, 0, 0, 0);
     optionButtonLayout->addWidget(m_partLabel, 0, Qt::AlignHCenter);
-    optionButtonLayout->addWidget(m_noImmutableCheckBox, 0, Qt::AlignHCenter);
     optionButtonLayout->addWidget(m_fullDiskPartitionBnt, 0, Qt::AlignHCenter);
     optionButtonLayout->addWidget(m_customPartitionBnt, 0, Qt::AlignHCenter);
     optionButtonLayout->addWidget(m_seniorPartitionBnt, 0, Qt::AlignHCenter);
@@ -109,6 +90,7 @@ PartitionNavFrame::PartitionNavFrame(QWidget *parent):
     DButtonBoxButton *ghostMode = new DButtonBoxButton("");
     boxBtnList << isoMode << ghostMode;
     m_modeBox->setButtonList(boxBtnList, true);
+    m_modeBox->hide(); // Fedora installs the current live image; uimg restoration is unsupported.
     for (int i = 0; i < boxBtnList.size(); ++i) {
         m_modeBox->setId(boxBtnList[i], i);
     }
@@ -184,8 +166,7 @@ PartitionNavFrame::PartitionNavFrame(QWidget *parent):
 
     initPartitionFrame();
     initConnection();
-    //生成秘钥
-    GenerateRecoveryKey();
+    clearGhostSetting();
 }
 //磁盘解密后，重新刷新设备信息
 void PartitionNavFrame::refreshDeviceInfo()
@@ -284,21 +265,15 @@ void PartitionNavFrame::initConnection()
                 m_imgSelect->setVisible(false);
                 m_partLabel->setVisible(false);
                 clearGhostSetting();
-                m_noImmutableCheckBox->setVisible(isNoImmutableOptionAvailable());
             } else {
                 m_imgSelect->setVisible(true);
                 m_partLabel->setVisible(true);
-                m_noImmutableCheckBox->setChecked(false);
-                m_noImmutableCheckBox->setVisible(false);
             }
             m_scrollAreaContentWidget->adjustSize();
         }
     });
 
-    connect(m_noImmutableCheckBox, &DCheckBox::toggled, this, [=]{
-        applyNoImmutableChoice();
-        PartitionOperateManager::instance()->resetDisk();
-    });
+
 }
 
 void PartitionNavFrame::initPartitionFrame()
@@ -346,7 +321,6 @@ void PartitionNavFrame::updateTs()
     m_modeBox->button(0)->setText(tr("Install  ISO"));
     m_modeBox->button(1)->setText(tr("Install uimg"));
 
-    m_noImmutableCheckBox->setText(tr("Install without immutable system"));
 
     m_fullDiskPartitionBnt->setInstallTypeText(::QObject::tr("Full Disk (Recommended)"));
     m_fullDiskPartitionBnt->setIntroductionText(::QObject::tr("The system will be installed on the disk you selected. All data on the selected disk (including system and data partitions) will be formatted."));
@@ -372,56 +346,11 @@ void PartitionNavFrame::updateTs()
     QTimer::singleShot(100, m_scrollAreaContentWidget, &QWidget::adjustSize);
 }
 
-bool PartitionNavFrame::isNoImmutableOptionAvailable() const
-{
-    return CommonFunc::getCurrentOsVersion() == "V25" && CommonFunc::getSettingsBool("DI_NO_IMMUTABLE_LOAD");
-}
-
-void PartitionNavFrame::cacheInstallProfileDefaults()
-{
-    for (const QString &key : NO_IMMUTABLE_PROFILE_KEYS) {
-        m_installProfileDefaults.insert(key, CommonFunc::getSettingsString(key));
-    }
-}
-
-void PartitionNavFrame::applyNoImmutableChoice()
-{
-    const bool enabled = m_noImmutableCheckBox && m_noImmutableCheckBox->isChecked();
-    CommonFunc::setSettingsValue("DI_NO_IMMUTABLE_INSTALL", enabled);
-
-    if (!enabled) {
-        for (auto it = m_installProfileDefaults.constBegin(); it != m_installProfileDefaults.constEnd(); ++it) {
-            CommonFunc::setSettingsValue(it.key(), it.value());
-        }
-        return;
-    }
-
-    const QString policyFile = QString("%1/settings/full_disk_policy_no_immutable.json")
-            .arg(CommonFunc::getSystemEnv(DI_CONFIG_DIR_ENV));
-    CommonFunc::setSettingsValue("DI_IMMUTABLE_SYSTEM", false);
-    CommonFunc::setSettingsValue("DI_PART_POLICY_FILE", policyFile);
-    CommonFunc::setSettingsValue("DI_SAVE_USER_DATA_LOAD", false);
-    CommonFunc::setSettingsValue("DI_IS_SAVE_AUTHORIZED_DATA_CONFIG", false);
-    CommonFunc::setSettingsValue("DI_IS_INIT_RECOVERY", false);
-    CommonFunc::setSettingsValue("DI_VALID_DEVICE_MIN_SIZE_CONFIG", 32);
-    CommonFunc::setSettingsValue("DI_DEVICE_MIN_SIZE_CONFIG", 40);
-    CommonFunc::setSettingsValue("DI_BOOT_SIZE_CONFIG", 2048);
-    CommonFunc::setSettingsValue("DI_ROOTA_SIZE_CONFIG", 32768);
-    CommonFunc::setSettingsValue("DI_SWAP_MAX_SIZE_CONFIG", 8192);
-    CommonFunc::setSettingsValue("DI_PERSISTENT_SIZE_CONFIG", 0);
-    CommonFunc::setSettingsValue("DI_DATA_MIN_SIZE_CONFIG", "0%");
-}
-
 void PartitionNavFrame::clearGhostSetting()
 {
     CommonFunc::setSettingsValue("DI_UIMG_FILE", "");
     CommonFunc::setSettingsValue("DI_IS_GHOST_MODE", false);
     CommonFunc::setSettingsValue("DI_UIMG_DEVICE", "");
-}
-
-void PartitionNavFrame::GenerateRecoveryKey()
-{
-    CommonFunc::setRecoveryKey();
 }
 
 CheckResult PartitionNavFrame::checkUImg(const QString &uimgFilePath)
@@ -485,7 +414,7 @@ CheckResult PartitionNavFrame::checkUImg(const QString &uimgFilePath)
 
     QMap<QString, quint64> dirSize;
     QJsonObject dirSizeObject = infoObject.value("dirSize").toObject();
-    QStringList list = {"/", "/persistent", "/boot", "/home", "/tmp", "/var", "/srv", "/opt", "/usr/local", "/root", "/boot/efi"};
+    QStringList list = {"/", "/boot", "/home", "/tmp", "/var", "/srv", "/opt", "/usr/local", "/root", "/boot/efi"};
     foreach(auto &i , list) {
         if (dirSizeObject.contains(i)) {
             dirSize.insert(i, dirSizeObject.value(i).toString().toULongLong());
@@ -560,79 +489,6 @@ QString PartitionNavFrame::parseHuaweiType(const QString &type) {
     return result;
 }
 
-void PartitionNavFrame::onStartRepairTool()
-{
-    DDialog *checkDlg = new DDialog;
-    checkDlg->setOnButtonClickedClose(true);
-    checkDlg->setMessage(tr("Recognizing installed OS..."));
-    DSpinner *spinner = new DSpinner;
-    spinner->setFixedSize(32, 32);
-    checkDlg->addSpacing(15);
-    checkDlg->addContent(spinner, Qt::AlignCenter);
-    connect(checkDlg, &DDialog::visibleChanged, [=](bool visible){
-        visible ? spinner->start() : spinner->stop();
-        checkDlg->moveToCenter();
-    });
-
-    QFuture<bool> result = QtConcurrent::run([=]{
-        QString output;
-        CommonFunc::command("/usr/bin/os-prober", {}, output);
-        if(!output.isEmpty()) {
-            QStringList splits = CommonFunc::qstringSplitToQStringList(output, "\n");
-            QStringList oslist;
-            for (auto line: splits) {
-                oslist = CommonFunc::qstringSplitToQStringList(line, ":");
-                if(oslist.size() > 2) {
-                    line = oslist.at(oslist.size() - 2).toLower();
-                    if(line == "uos" || line == "deepin") {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
-    });
-
-    QFutureWatcher<bool> *watcher = new QFutureWatcher<bool>(this);
-    connect(watcher, &QFutureWatcher<bool>::finished, this, [=]{
-        checkDlg->accept();
-        DDialog *dialog = new DDialog;
-        dialog->setIcon(QIcon::fromTheme("dialog-warning"));
-        connect(dialog, &DDialog::visibleChanged, dialog, [=](bool visible){
-            if(visible) {
-                dialog->moveToCenter();
-            }
-        });
-        if(watcher->result()) {
-            dialog->setMessage(tr("The repair mode helps you fix boot files."
-                                 " Are you sure you want to exit the installation and enter the repair mode?"));
-            dialog->addButton(tr("Cancel"));
-            dialog->addButton(tr("Confirm"), true, DDialog::ButtonRecommend);
-            connect(dialog, &DDialog::buttonClicked, [=](int index, const QString &text) {
-                Q_UNUSED(text);
-                if (index == 1) {
-                    if (QFile::exists("/usr/sbin/deepin-repair-tools")) {
-        #ifndef QT_DEBUG
-                        QProcess::startDetached("/bin/bash", QStringList() <<
-                            "/usr/share/deepin-installer/tools/deepin-repairtool-launch");
-        #endif
-                    }
-                }
-            });
-        } else {
-            dialog->setOnButtonClickedClose(true);
-            dialog->setMessage(tr("The repair mode works for devices with UOS only."));
-            dialog->addButton(tr("Confirm"), true, DDialog::ButtonRecommend);
-        }
-
-        dialog->exec();
-        watcher->deleteLater();
-    });
-    watcher->setFuture(result);
-    checkDlg->exec();
-}
-
 void PartitionNavFrame::initBtnConnect(const OptionButton &pOptionButton)
 {
     connect(&pOptionButton, &OptionButton::select, this, [=](const OptionButton &pOptionButton) {
@@ -648,7 +504,6 @@ void PartitionNavFrame::initBtnConnect(const OptionButton &pOptionButton)
             return;
         }
 
-        applyNoImmutableChoice();
 
         if(m_modeBox->checkedId() == 1) {
             if (m_uimgCheckResult.uimgFilePath.isEmpty() || !QFileInfo::exists(m_uimgCheckResult.uimgFilePath)) {

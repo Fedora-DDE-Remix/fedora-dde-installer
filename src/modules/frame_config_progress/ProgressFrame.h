@@ -1,11 +1,11 @@
-#ifndef PROGRESSFRAME_H
-#define PROGRESSFRAME_H
+#ifndef FEDORA_DDE_CONFIGURATION_PROGRESS_FRAME_H
+#define FEDORA_DDE_CONFIGURATION_PROGRESS_FRAME_H
 
 #include "FramePluginInterface.h"
 
-class AnimationWidget;
-class WarningDialog;
 class QLabel;
+class QPushButton;
+class QProgressBar;
 
 class ProgressFrame : public FramePluginInterface {
     Q_OBJECT
@@ -21,15 +21,19 @@ protected:
 private:
     void startInstall();
     void finished();
-    void exitInstall(const QString &err);
+    void exitInstall(const QString &error);
+    void actionClicked();
 
-private slots:
-    void warnWidgetEnterBtnSlot();
-
-private:
-    WarningDialog *m_warningFrame = nullptr;
+    QLabel *m_logoLabel = nullptr;
     QLabel *m_titleLabel = nullptr;
     QLabel *m_progLabel = nullptr;
+    QProgressBar *m_progressWidget = nullptr;
+    QPushButton *m_actionButton = nullptr;
+    QPushButton *m_secondaryButton = nullptr;
+    bool m_running = false;
+    bool m_complete = false;
+    bool m_accountSaved = false;
+    QString m_error;
 };
 
-#endif // PROGRESSFRAME_H
+#endif

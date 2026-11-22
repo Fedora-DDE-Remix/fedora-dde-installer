@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+unset LD_PRELOAD LD_LIBRARY_PATH PYTHONPATH PYTHONHOME BASH_ENV ENV
+[[ "$EUID" -eq 0 && "$#" -eq 0 ]] || exit 1
+umask 077
+source /usr/share/fedora-dde-installer/tools/scripts/init_environment.sh
+source "$DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh"
+init_config
+init_hookslist

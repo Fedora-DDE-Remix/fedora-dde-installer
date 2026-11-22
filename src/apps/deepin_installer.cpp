@@ -20,18 +20,21 @@
 #include "globals.h"
 #include "DeviceManager.h"
 #include "InstallerLogManager.h"
-#include "ScreenMonitor.h"
 
 #include <DApplication>
 #include <DLog>
 #include <QScreen>
+#include <QTimer>
 #include <DTitlebar>
+#include <DDialog>
+#include <sys/stat.h>
 
 
 DWIDGET_USE_NAMESPACE
 DCORE_USE_NAMESPACE
 
 int main(int argc, char* argv[]) {
+    umask(0077);
 
     //for qt5platform-plugins load DPlatformIntegration or DPlatformIntegrationParent
     if (!QString(qgetenv("XDG_CURRENT_DESKTOP")).toLower().startsWith("deepin")){
@@ -42,16 +45,15 @@ int main(int argc, char* argv[]) {
     DApplication::setAttribute(Qt::AA_Use96Dpi);
 
     DApplication app(argc, argv);
-    app.setApplicationDisplayName(::QObject::tr("Deepin Installer"));
-    app.setApplicationName("deepin-installer");
+    app.setApplicationName("fedora-dde-installer");
 
     // init log
 #ifndef QT_DEBUG
     InstallerLogManager::instance()->redirectLog(QString("%1/%2.log").arg(gSystemLogDir, app.applicationName()));
 #else
     QString output;
-    CommonFunc::command(QCoreApplication::applicationDirPath() +  "/deepin-installer-config",
-                        QStringList() << "init" << "/tmp/deepin-installer/deepin-installer.conf", output);
+    CommonFunc::command(QCoreApplication::applicationDirPath() +  "/fedora-dde-installer-config",
+                        QStringList() << "init" << "/run/fedora-dde-installer/installer.conf", output);
 #endif // QT_DEBUG
 
     QFont font(app.font());
@@ -67,41 +69,45 @@ int main(int argc, char* argv[]) {
         exit(0);
     }
 
-    qInfo() << "deepin-installer version:" + CommonFunc::getVersion();
+    qInfo() << "fedora-dde-installer version:" + CommonFunc::getVersion();
 
     //install translate
     QTranslator translator;
     QString strLocale = CommonFunc::getSettingsString("DI_LOCALE");
-    QString tsFile = QString("%1/deepin-installer-%2.qm").arg(DI_I18N_DIR_ENV).arg(strLocale);
+    QString tsFile = QString("%1/fedora-dde-installer-%2.qm").arg(DI_I18N_DIR_ENV).arg(strLocale);
     translator.load(tsFile);
 
     // scan devices
     DeviceManager::instance()->scanDevices(true);
-    ScreenMonitor screenMonitor;
-    screenMonitor.start();
     // init mainwindow
     MainWindow w;
     w.setTranslator(&translator);
     app.installTranslator(&translator);
+    app.setApplicationDisplayName(::QObject::tr("Fedora DDE Remix Installer"));
     app.installEventFilter(&w);
 
-    QString installMode = CommonFunc::getSettingsString("DI_INSTALL_MODE");
-    if (installMode.contains("auto")) {
-        w.loadPlugins("deepin_installer_plugins");
-        QTimer::singleShot(100, &w, &MainWindow::showFullScreen);
-    } else {
-        //非自动安装，插上显示器才能进入安装界面
-        QObject::connect(&screenMonitor, &ScreenMonitor::screenReady, &w, [&w](){
-            if (w.isHidden()) {
-                w.setPluginSize();
-                w.loadPlugins("deepin_installer_plugins");
-                w.showFullScreen();
-            }
-        });
-    }
+    // One interactive workflow: install, configure the mounted target, finish.
+    CommonFunc::setSettingsValue("DI_INSTALL_MODE", gInstallModeDefault);
+    CommonFunc::setSettingsValue("DI_REBOOT_AFTER_SETUP", false);
+    CommonFunc::setSettingsValue("DI_PASSWORD_ENCRYPTION_CONFIG", false);
+    CommonFunc::setSettingsValue("DI_ROOT_USER_LOAD", false);
+    CommonFunc::setSettingsValue("DI_IS_GHOST_MODE", false);
+    QTimer::singleShot(0, &w, [&w] {
+        w.setPluginSize();
+        if (!w.loadPlugins("fedora_dde_installer_plugins")) {
+            DDialog dialog;
+            dialog.setTitle(QObject::tr("The installer could not start"));
+            dialog.setMessage(QObject::tr("A required page or configuration is missing. Rebuild the Live image with the complete Fedora DDE Remix Installer package."));
+            dialog.setWordWrapMessage(true);
+            dialog.addButton(QObject::tr("Close"));
+            dialog.exec();
+            QCoreApplication::exit(EXIT_FAILURE);
+            return;
+        }
+        w.showFullScreen();
+    });
 
     QObject::connect(&app, &QCoreApplication::aboutToQuit, DeviceManager::instance(), &DeviceManager::quitUSBScan);
-    QObject::connect(&app, &QCoreApplication::aboutToQuit, &screenMonitor, &ScreenMonitor::terminate);
 
 
     return app.exec();

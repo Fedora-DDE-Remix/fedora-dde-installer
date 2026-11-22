@@ -202,7 +202,7 @@ QPair<QString, QString> ComponentsManager::getTSText(const QString &id)
         {"ha", {::QObject::tr("High Availability"), ::QObject::tr("Infrastructure for highly available services and/or shared storage.")}},
         {"infiniband", {::QObject::tr("InfiniBand Support"), ::QObject::tr("Software designed for supporting clustering and grid connectivity using RDMA-based InfiniBand and iWARP fabrics.")}},
         {"large-systems", {::QObject::tr("Large Systems Performance"), ::QObject::tr("Performance support tools for large systems.")}},
-        {"platform-devel", {::QObject::tr("Platform Development"), ::QObject::tr("Recommended development headers and libraries for developing applications to run on UOS.")}},
+        {"platform-devel", {::QObject::tr("Platform Development"), ::QObject::tr("Recommended development headers and libraries for developing applications to run on Fedora.")}},
         {"internet-applications", {::QObject::tr("Internet Applications"), ::QObject::tr("Email, chat, and video conferencing software.")}},
         {"virtualization-tool-set", {::QObject::tr("Virtualization Toolset"), ::QObject::tr("Toolset for virtualization enviroment (host and guest).")}},
         {"dde", {::QObject::tr("Server Environment with GUI"), ::QObject::tr("Operates the services and applications on the graphical user interface.")}},

@@ -60,12 +60,7 @@ void ProgressFailedFrame::showSaveLogSlot()
 
 void ProgressFailedFrame::installFailedSlot()
 {
-    qInfo() << "shutdown System !";
-#ifdef QT_DEBUG
-    QCoreApplication::exit();
-#else
-    CommonFunc::shutdownSystem();
-#endif //QT_DEBUG
+    QCoreApplication::quit();
 }
 
 void ProgressFailedFrame::initUI()
@@ -112,9 +107,7 @@ void ProgressFailedFrame::initConnect()
 void ProgressFailedFrame::updateTs()
 {
     m_titleWidget->setTitleLabelProperty(::QObject::tr("Installation Failed"), "");
-    m_titleWidget->setTipsLabelProperty(::QObject::tr("Sorry for the trouble. Please take photos of the below error log,"
-                                                      " or save it to an external disk, or scan the QR code, and send the log to us."
-                                                      " We will help solve your issue."), "font-size:12px;font-weight:Medium;", true);
+    m_titleWidget->setTipsLabelProperty(tr("Review the error log or save it to a removable device. You can return to the live desktop to investigate."), "font-size:12px;font-weight:Medium;", true);
     m_saveLogWidget->setTitleText(::QObject::tr("Save Log"), "QLabel { font-size:24px; font-weight:bold; color:rgba(0,26,46,1); }");
     m_saveLogWidget->setTipsText(::QObject::tr("Save the error log to a removable device"), "");
     m_saveToUsb->setTitleAndMessage(tr("Save Log"), tr("Save the error log to a removable device"));

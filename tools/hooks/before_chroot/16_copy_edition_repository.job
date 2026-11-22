@@ -1,7 +1,0 @@
-#!/bin/bash
-
-#导入函数库
-source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
-
-# 拷贝镜像仓库到目标系统
-copy_edition_repository

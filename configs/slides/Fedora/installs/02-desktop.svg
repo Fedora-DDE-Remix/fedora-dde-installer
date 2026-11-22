@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540">
+  <defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#142e60"/><stop offset="1" stop-color="#0c647d"/></linearGradient></defs>
+  <rect width="960" height="540" rx="24" fill="url(#bg)"/>
+  <rect x="160" y="80" width="640" height="350" rx="20" fill="#132d50" stroke="#6599c8" stroke-width="2"/>
+  <rect x="194" y="120" width="256" height="252" rx="14" fill="#e2eff8"/>
+  <rect x="194" y="120" width="256" height="42" rx="14" fill="#9bc4e1"/>
+  <rect x="216" y="186" width="72" height="164" rx="7" fill="#bdd7e9"/>
+  <g fill="#4ab6d7"><rect x="310" y="190" width="48" height="40" rx="7"/><rect x="374" y="190" width="48" height="40" rx="7"/><rect x="310" y="250" width="48" height="40" rx="7"/><rect x="374" y="250" width="48" height="40" rx="7"/></g>
+  <rect x="478" y="145" width="282" height="195" rx="14" fill="#d0e7f3"/>
+  <circle cx="532" cy="201" r="24" fill="#1b9ed5"/>
+  <path d="M578 189H728M578 212H682M508 258H728M508 285H667" stroke="#73a1c1" stroke-width="10" stroke-linecap="round"/>
+  <rect x="340" y="390" width="280" height="54" rx="18" fill="#d8eff7"/>
+  <g fill="#25a5d3"><rect x="359" y="402" width="30" height="30" rx="8"/><rect x="405" y="402" width="30" height="30" rx="8"/><rect x="451" y="402" width="30" height="30" rx="8"/><rect x="497" y="402" width="30" height="30" rx="8"/><rect x="543" y="402" width="30" height="30" rx="8"/></g>
+</svg>

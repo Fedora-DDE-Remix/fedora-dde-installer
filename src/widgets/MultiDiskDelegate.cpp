@@ -29,7 +29,7 @@ void MultiDiskDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
     QColor bgColor = bHover ? index.data(Qt::UserRole + 110).value<QColor>() : index.data(Qt::BackgroundRole).value<QColor>();
     QColor textColor = option.palette.color(QPalette::WindowText);
     QColor highlightColor = option.palette.color(QPalette::Highlight);
-    embed->setVisible(bChecked);
+    embed->hide();
 
     painter->save();
     painter->setRenderHint(QPainter::Antialiasing);
@@ -65,9 +65,6 @@ void MultiDiskDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
     QRect nameRect;
     nameRect.moveTopLeft(iconRect.topRight() + QPoint(10, 0));
     int nameWidth = contentRect.topRight().x() - nameRect.topLeft().x();
-    if(bChecked) {
-        nameWidth -= embed->width() + 5;
-    }
     nameRect.setWidth(nameWidth);
     nameRect.setHeight(nameBound.height());
     QRect totalRect = nameRect;
@@ -84,14 +81,6 @@ void MultiDiskDelegate::paint(QPainter *painter, const QStyleOptionViewItem &opt
     }
     painter->setPen(textColor);
     painter->drawText(totalRect, Qt::AlignRight | Qt::TextSingleLine, totalString);
-    //draw embed
-    if(bChecked) {
-        QRect embedRect;
-        embedRect.setSize(embed->size());
-        embedRect.moveTopLeft(nameRect.topRight() + QPoint(5, 0));
-        embed->setGeometry(embedRect);
-    }
-
     QFont detailFont = painter->font();
     detailFont.setWeight(QFont::Normal);
     detailFont.setPixelSize(12);

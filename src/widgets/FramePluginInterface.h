@@ -20,6 +20,7 @@ extern const QString gFramePartition;
 extern const QString gFrameUserInfo;
 extern const QString gFramePrepare;
 extern const QString gFrameInstall;
+extern const QString gFrameConfigure;
 extern const QString gFrameApplication;
 
 class FramePluginInterface : public QWidget, public PluginInterface

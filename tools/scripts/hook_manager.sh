@@ -1,35 +1,14 @@
 #!/bin/bash
-
-set -e # 开启脚本错误校验，脚本出错后立即结束
-
-#导入函数库
-source $DI_INSTALL_TOOLS_DIR_ENV/scripts/function_include.sh
-
-# hooks manager
-hooks_manager() {
-    local in_file=$1
-    local start_time=$(date +%s)
-
-    echo "run $in_file..."
-    case ${in_file} in
-      */*in_chroot/*|*/user_config/*)
-        if [ ! -d "/target" ]; then
-            . "${in_file}"
-        elif [ -f "$in_file" ]; then
-            chroot /target /bin/bash -e "${in_file}"
-        fi
-        ;;
-      *)
-        # Run normal hooks.
-        [ -f "$in_file" ] && . "${in_file}"
-        ;;
-    esac
-
-    ## 打印job执行日志
-    local end_time=$(date +%s)
-    local cost_time=$((end_time-$start_time))
-    echo "run ${in_file} time is $(($cost_time/60))m $(($cost_time%60))s"
-}
-
-# Run hook file
-hooks_manager $1
+set -euo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+unset LD_PRELOAD LD_LIBRARY_PATH PYTHONPATH PYTHONHOME BASH_ENV ENV
+source /usr/share/fedora-dde-installer/tools/scripts/init_environment.sh
+[[ "$#" -eq 1 && "$EUID" -eq 0 ]] || exit 1
+hook=$(realpath -e -- "$1")
+case "$hook" in
+    "$DI_INSTALL_TOOLS_DIR_ENV"/hooks/before_chroot/*.job|    "$DI_INSTALL_TOOLS_DIR_ENV"/hooks/in_chroot/*.job|    "$DI_INSTALL_TOOLS_DIR_ENV"/hooks/after_chroot/*.job|    "$DI_INSTALL_TOOLS_DIR_ENV"/hooks/user_config/*.job|    "$DI_INSTALL_TOOLS_DIR_ENV"/hooks/cleanup/*.job) ;;
+    *) echo 'Refusing a hook outside the installed Fedora workflow.' >&2; exit 1 ;;
+esac
+# Never infer chroot from a directory's existence. The backend validates the
+# target mount and the Live-session state before any target operation.
+exec /bin/bash -e "$hook"

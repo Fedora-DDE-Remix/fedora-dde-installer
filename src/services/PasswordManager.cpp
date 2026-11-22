@@ -1,18 +1,12 @@
 #include "PasswordManager.h"
 #include "CommonFunc.h"
 
-#include <QDebug>
-#include <QRegularExpression>
-#include <QProcess>
-
-// pw-check库1052中新加了枚举变量，为了保持低版本兼容，使用定义的枚举值对应的int值
-#define PW_CHARACTER_TYPE_TOO_FEW 14
-#define PW_USER_PASSWD_DUPLICATE 15
+#include <algorithm>
 
 PasswordManager *PasswordManager::instance()
 {
-    static PasswordManager pm;
-    return &pm;
+    static PasswordManager manager;
+    return &manager;
 }
 
 PasswordManager::PasswordManager()
@@ -21,124 +15,36 @@ PasswordManager::PasswordManager()
     m_passwdMaxLength = CommonFunc::getSettingsString("DI_PASSWORD_MAX_LEN_CONFIG");
     m_passwdValidatePolicy = CommonFunc::getSettingsString("DI_PASSWORD_VALIDATE_CONFIG");
     m_passwdValidateRequired = CommonFunc::getSettingsString("DI_PASSWORD_VALIDATE_REQUIRED_CONFIG");
-    m_strongPasswordEnable = CommonFunc::getSettingsString("DI_PASSWORD_STRONG_CHECK_CONFIG");
-    m_passwdPalindromeLength = CommonFunc::getSettingsString("DI_PASSWORD_PALINGROME_LENGTH_CONFIG");
-    m_passwdMonotonousLength = CommonFunc::getSettingsString("DI_PASSWORD_MONOTONOUS_LENGTH_CONFIG");
-    m_passwdContinuousLength = CommonFunc::getSettingsString("DI_PASSWORD_CONTINUOUS_LENGTH_CONFIG");
-
-    setup();
 }
 
-void PasswordManager::setup()
+bool PasswordManager::checked(const QString &user, const QString &password, QString &error)
 {
-    QString info = "/etc/deepin/dde.conf";
-    QString cmd = "/usr/bin/pwd-conf-update";
-    QFile file(info);
-
-    file.open(QIODevice::WriteOnly);
-    if (file.isOpen()) {
-        QStringList list= {"[Password]",
-                       QString("STRONG_PASSWORD=%1").arg(m_strongPasswordEnable),
-                       QString("PASSWORD_MIN_LENGTH=%1").arg(m_passwdMinLength),
-                       QString("PASSWORD_MAX_LENGTH=%1").arg(m_passwdMaxLength),
-                       QString("VALIDATE_POLICY=\"%1\"").arg(m_passwdValidatePolicy),
-                       QString("VALIDATE_REQUIRED=%1").arg(m_passwdValidateRequired),
-                       QString("PALINDROME_NUM=%1").arg(m_passwdPalindromeLength),
-                       QString("CONSECUTIVE_SAME_CHARACTER_NUM=%1").arg(m_passwdContinuousLength),
-                       QString("MONOTONE_CHARACTER_NUM=%1").arg(m_passwdMonotonousLength),
-                  };
-
-        // 更新密码配置
-        file.write(list.join("\n").toUtf8() + "\n");
-        file.close();
-
-        QString out;
-        if (!CommonFunc::command(cmd, QStringList(), out)) {
-           qWarning() << QString("PasswordManager run cmd: %1 failed: %2").arg(cmd).arg(out);
-        }
-    } else {
-        qWarning() << "failed file open. " << info;
-    }
+    return checked(user, password, LowerLevel, error);
 }
 
-bool PasswordManager::checked(const QString &user, const QString &passwd, QString &err)
+bool PasswordManager::checked(const QString &user, const QString &password, int level, QString &error)
 {
-    return checked(user, passwd, LowerLevel, err);
-}
-
-bool PasswordManager::checked(const QString &user, const QString &passwd, int level, QString &err)
-{
-    bool ret = true;
-
-    if (passwdLevel(user, passwd) < level) {
-        err = ::QObject::tr("The password must have at least 8 characters"
-                            ", and contain at least 3 of the four available character types: lowercase letters"
-                            ", uppercase letters, numbers, and symbols");
+    error.clear();
+    const int minimum = qMax(8, m_passwdMinLength.toInt());
+    const int maximum = qMax(minimum, m_passwdMaxLength.toInt());
+    if (password.size() < minimum || password.size() > maximum) {
+        error = QObject::tr("Password must be between %1 and %2 characters").arg(minimum).arg(maximum);
         return false;
     }
-
-    PW_ERROR_TYPE type = deepin_pw_check(user.toStdString().c_str(), passwd.toStdString().c_str(), level, nullptr);
-    qDebug() << "PasswordManager password checked error type:" << err_to_string(type);
-    if (type == PW_NO_ERR && user == passwd) {
-        type = (PW_ERROR_TYPE)PW_USER_PASSWD_DUPLICATE;
+    if (std::any_of(password.cbegin(), password.cend(), [](QChar character) { return character.isNull() || character.category() == QChar::Other_Control; })) {
+        error = QObject::tr("The password must not contain control characters.");
+        return false;
     }
-    switch (int(type)) {
-        case PW_NO_ERR:break;
-
-        case PW_ERR_PASSWORD_EMPTY: {
-            err = ::QObject::tr("The password cannot be empty");
-            ret = false;
-        } break;
-
-        case PW_ERR_LENGTH_SHORT:
-        case PW_ERR_LENGTH_LONG: {
-            err = ::QObject::tr("Password must be between %1 and %2 characters")
-                    .arg(m_passwdMinLength)
-                    .arg(m_passwdMaxLength);
-            ret = false;
-        } break;
-
-        case PW_CHARACTER_TYPE_TOO_FEW:
-        case PW_ERR_CHARACTER_INVALID:{
-            // 优化正则表达式，正确处理包含双引号和反斜杠的特殊字符
-            QString symbols = QString(m_passwdValidatePolicy).replace(QRegularExpression("[0-9a-zA-Z;]"), "");
-            err = ::QObject::tr("The password should contain at least %1 of the four available character types: lowercase letters, uppercase letters, numbers, and symbols (%2)")
-                    .arg(m_passwdValidateRequired).arg(symbols);
-            ret = false;
-        } break;
-
-        case PW_ERR_PALINDROME: {
-            err = ::QObject::tr("Password must not contain more than %1 palindrome characters").arg(m_passwdPalindromeLength);
-            ret = false;
-        } break;
-
-        case PW_ERR_WORD: {
-            err = ::QObject::tr("Do not use common words and combinations as password");
-            ret = false;
-        } break;
-
-        case PW_ERR_PW_MONOTONE:
-        case PW_ERR_PW_CONSECUTIVE_SAME: {
-            err = ::QObject::tr("No more than %1 consecutive or repeated characters please").arg(m_passwdContinuousLength);
-            ret = false;
-        } break;
-        case PW_USER_PASSWD_DUPLICATE: {
-            err = ::QObject::tr("Different from the username");
-            ret = false;
-        } break;
-
-        case PW_ERR_PW_REPEAT:
-        case PW_ERR_PW_FIRST_UPPERM:
-        case PW_ERR_PARA:
-        case PW_ERR_INTERNAL:
-        case PW_ERR_USER:
-        default: {
-            err = ::QObject::tr("It does not meet password rules");
-            ret = false;
-        } break;
+    if (!user.isEmpty() && user.compare(password, Qt::CaseInsensitive) == 0) {
+        error = QObject::tr("The password must be different from the username.");
+        return false;
     }
-
-    return ret;
+    const int types = qBound(1, m_passwdValidateRequired.toInt(), 4);
+    if (passwdStrength(password) < types || passwdLevel(user, password) < level) {
+        error = QObject::tr("Use a longer password with a mix of letters, numbers or symbols.");
+        return false;
+    }
+    return true;
 }
 
 QPair<QString, QColor> PasswordManager::passwdLevel(PasswdLevel level)

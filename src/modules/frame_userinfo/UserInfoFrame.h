@@ -10,7 +10,6 @@
 #include "TimezoneFrame.h"
 #include "IconComboBox.h"
 #include "PopupWindow.h"
-#include "tray_module_interface.h"
 
 #include <DLineEdit>
 #include <DPasswordEdit>
@@ -45,7 +44,7 @@ private:
     void initUI();
     void updateTs() override;
 
-    void writeConf();
+    bool writeConf();
 
     void initKeyboard();
 
@@ -67,7 +66,6 @@ private:
 private slots:
     void onKeyboardMenuSelected(int index);
     void onLanguageMenuSelected(int index);
-    void addModule(dss::module::BaseModuleInterface *module);
 private:
 
     TitleWidget* m_titleWidget = nullptr;
@@ -88,7 +86,6 @@ private:
 
     PopupWindow *m_networkWidget = nullptr;
 
-    dss::module::TrayModuleInterface *m_networkModule = nullptr;
 
     DSuggestButton *m_nextBnt = nullptr;
 

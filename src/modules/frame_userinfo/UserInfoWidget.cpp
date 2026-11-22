@@ -18,6 +18,13 @@
 #include <QRegularExpressionValidator>
 #include <QTimer>
 #include <QApplication>
+#include <QFileInfo>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSettings>
+#include <algorithm>
+#include <unistd.h>
 
 const int kWidthRange = 30;
 const int kInfoItemSpace = 35;
@@ -36,8 +43,18 @@ UserInfoWidget::UserInfoWidget(QWidget *partent)
 
 void UserInfoWidget::showEvent(QShowEvent* event)
 {
+    QFile stateFile("/run/fedora-dde-installer/state.json");
+    if (stateFile.open(QIODevice::ReadOnly)) {
+        const QString createdUser = QJsonDocument::fromJson(stateFile.readAll()).object().value("user").toString();
+        if (!createdUser.isEmpty()) {
+            // A partial configuration retry must finish the account already
+            // created in the target rather than create a second administrator.
+            m_usernameComboBox->setCurrentText(createdUser);
+            m_usernameComboBox->setEnabled(false);
+            m_usernameEdit->setEnabled(false);
+        }
+    }
     checkNextButtonEnable();
-
     QWidget::showEvent(event);
 }
 
@@ -179,7 +196,6 @@ void UserInfoWidget::initUI()
     // 新建用户密码
     m_passwordLabel = new QLabel;
     m_passwordEdit = new DPasswordEdit;
-    m_passwordEdit->lineEdit()->setValidator(new QRegularExpressionValidator(QRegularExpression("^[^ ;]+$"), this));
     m_passwordEdit->setEchoMode(QLineEdit::Password);
     m_passwordEdit->setContextMenuPolicy(Qt::NoContextMenu);
     m_passwordEdit->layout()->setSpacing(7);
@@ -221,7 +237,6 @@ void UserInfoWidget::initUI()
     // 新建用户密码确认
     m_passwordCheckLabel = new QLabel;
     m_passwordCheckEdit = new DPasswordEdit;
-    m_passwordCheckEdit->lineEdit()->setValidator(new QRegularExpressionValidator(QRegularExpression("^[^ ;]+$"), this));
     m_passwordCheckEdit->setEchoMode(QLineEdit::Password);
     m_passwordCheckEdit->lineEdit()->setReadOnly(m_passwordEdit->lineEdit()->isReadOnly());
     m_passwordCheckEdit->setContextMenuPolicy(Qt::NoContextMenu);
@@ -274,7 +289,6 @@ void UserInfoWidget::initUI()
     // root用户密码
     m_rootPasswordLabel = new QLabel;
     m_rootPasswordEdit = new DPasswordEdit;
-    m_rootPasswordEdit->lineEdit()->setValidator(new QRegularExpressionValidator(QRegularExpression("^[^ ;]+$"), this));
     m_rootPasswordEdit->setEchoMode(QLineEdit::Password);
     m_rootPasswordEdit->setContextMenuPolicy(Qt::NoContextMenu);
     m_rootPasswordEdit->setFixedWidth(kInputWidgetWidth - kWidthRange);
@@ -311,7 +325,6 @@ void UserInfoWidget::initUI()
     // root用户密码确认
     m_rootPasswordCheckLabel = new QLabel;
     m_rootPasswordCheckEdit = new DPasswordEdit;
-    m_rootPasswordCheckEdit->lineEdit()->setValidator(new QRegularExpressionValidator(QRegularExpression("^[^ ;]+$"), this));
     m_rootPasswordCheckEdit->setEchoMode(QLineEdit::Password);
     m_rootPasswordCheckEdit->setContextMenuPolicy(Qt::NoContextMenu);
     m_rootPasswordCheckEdit->setFixedWidth(kInputWidgetWidth - kWidthRange);
@@ -371,9 +384,8 @@ void UserInfoWidget::initUI()
     layout->addLayout(passwordCheckLayout);
     layout->addSpacing(itemSpace);
 
-    if (CommonFunc::getSettingsBool("DI_ROOT_USER_LOAD")) {
-        layout->addWidget(m_wrapWidget, 0, Qt::AlignHCenter);
-    }
+    m_setRootPasswordCheck->setChecked(false);
+    m_wrapWidget->hide();
 
     setLayout(layout);
 
@@ -385,114 +397,37 @@ void UserInfoWidget::initUI()
 
 void UserInfoWidget::readConf()
 {
-    QStringList oldUsername;
-    // 后配置安装模式的时候直接从home目录读取用户信息，否则从配置文件读取
-    if (qApp->applicationName() == "deepin-installer-first-boot") {
-        oldUsername = CommonFunc::findOldUsers("/home");
-    } else {
-        oldUsername = CommonFunc::getSettingsStringList("DI_OLD_USERNAME_LIST");
-    }
-   
-    if (!oldUsername.isEmpty()) {
-        m_usernameComboBox->addItems(oldUsername);
-        m_usernameComboBox->setCurrentIndex(0);
-    } else {
-        m_usernameReuseTip->setVisible(false);
-    }
-
-
-    auto username = CommonFunc::getSettingsValue("DI_USERNAME").toString();
-    if (!username.isEmpty()) {
+    // No live-session accounts or first-boot state are imported into the target.
+    m_usernameReuseTip->hide();
+    const QString username = CommonFunc::getSettingsString("DI_USERNAME");
+    const QString hostname = CommonFunc::getSettingsString("DI_HOSTNAME");
+    if (!username.isEmpty())
         m_usernameComboBox->setCurrentText(username);
-    }
-    
-    auto hostname = CommonFunc::getSettingsValue("DI_HOSTNAME").toString();
-    if (!hostname.isEmpty()) {
+    if (!hostname.isEmpty())
         m_hostnameEdit->setText(hostname);
-    }
-  
-    QString passwordConf = CommonFunc::getSettingsValue("DI_PASSWORD").toString();
-
-    if (CommonFunc::getSettingsBool("DI_PASSWORD_ENCRYPTION_CONFIG")) {
-        auto setDecryptedPassword = [](const QString &password) -> QString {
-            QString decryptedPassword;
-            if (password.isEmpty()) {
-                decryptedPassword = password;
-                qWarning() << "empty password!";
-            } else {
-#ifndef QT_DEBUG
-                if (!CommonFunc::command("deepin-installer-command-agent", {"-d", "-p", password}, decryptedPassword)) {
-#else
-                if (!CommonFunc::command(QDir(CommonFunc::getSystemEnv(DI_INSTALL_MODULE_DIR_ENV) + "../src").absoluteFilePath("deepin-installer-command-agent"), {"-d", "-p", password}, decryptedPassword)) {
-#endif
-                    decryptedPassword = password;
-                    qWarning() << "deepin-installer-command-agent -d failed!";
-                } else {
-                    qInfo() << "deepin-installer-command-agent -d success!";
-                }
-            }
-
-            return decryptedPassword;
-        };
-
-        QString passwordNew = setDecryptedPassword(passwordConf);
-
-        m_passwordEdit->setText(passwordNew);
-        m_passwordCheckEdit->setText(passwordNew);
-    } else {
-        m_passwordEdit->setText(passwordConf);
-        m_passwordCheckEdit->setText(passwordConf);
-    }
 }
 
-void UserInfoWidget::writeConf()
+bool UserInfoWidget::writeConf()
 {
+    // Secrets stay in the root-only runtime file. Never place a password in a
+    // command argument, a log message, or a reversibly encrypted static-key file.
+    const QString path = CommonFunc::getSystemEnv(DI_CONFIG_FILE_ENV);
+    const QFileInfo info(path);
+    const QFileInfo parent(info.absolutePath());
+    if (QDir::cleanPath(path) != "/run/fedora-dde-installer/installer.conf"
+            || geteuid() != 0 || !info.isFile() || info.isSymLink() || info.ownerId() != 0
+            || parent.isSymLink() || parent.ownerId() != 0
+            || !QFile::setPermissions(parent.absoluteFilePath(), QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner)
+            || !QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner)) {
+        return false;
+    }
     CommonFunc::setSettingsValue("DI_USERNAME", m_usernameComboBox->currentText());
     CommonFunc::setSettingsValue("DI_HOSTNAME", m_hostnameEdit->text());
-    QString password = m_passwordEdit->text();
-    QString rootPassword = m_setRootPasswordCheck->isChecked() ? m_rootPasswordEdit->text() : "";
-
-    if (CommonFunc::getSettingsBool("DI_PASSWORD_ENCRYPTION_CONFIG")) {
-
-        auto setCryptedPassword = [](const QString &password) -> QString {
-            QString cryptedPassword;
-            if (password.isEmpty()) {
-                cryptedPassword = password;
-                qWarning() << "empty password!";
-            } else {
-#ifndef QT_DEBUG
-                if (!CommonFunc::command("deepin-installer-command-agent", {"-p", password}, cryptedPassword)) {
-#else
-                if (!CommonFunc::command(QDir(CommonFunc::getSystemEnv(DI_INSTALL_MODULE_DIR_ENV) + "../src").absoluteFilePath("deepin-installer-command-agent"), {"-p", password}, cryptedPassword)) {
-#endif 
-                    cryptedPassword = password;
-                    qWarning() << "deepin-installer-command-agent failed!";
-                } else {
-                    qInfo() << "deepin-installer-command-agent success!";
-                }
-            }
-
-            return cryptedPassword;
-        };
-
-        QString passwordNew = setCryptedPassword(password);
-        QString rootPasswordNew = setCryptedPassword(rootPassword);
-
-        bool isPasswordNotOk = passwordNew.isEmpty() || passwordNew == password;
-        bool isRootPasswordNotOk = rootPasswordNew.isEmpty() || rootPasswordNew == rootPassword;
-
-        if (isPasswordNotOk && isRootPasswordNotOk) {
-            CommonFunc::setSettingsValue("DI_PASSWORD_ENCRYPTION_CONFIG", "false");
-        } else {
-            password = passwordNew;
-            rootPassword = rootPasswordNew;
-        }
-    }
-
-    CommonFunc::setSettingsValue("DI_PASSWORD", password);
-    CommonFunc::setSettingsValue("DI_ROOT_PASSWORD", rootPassword);
-
-    CommonFunc::sync();
+    CommonFunc::setSettingsValue("DI_PASSWORD_ENCRYPTION_CONFIG", false);
+    CommonFunc::setSettingsValue("DI_ROOT_PASSWORD", "");
+    CommonFunc::setSettingsValue("DI_PASSWORD", m_passwordEdit->text());
+    return QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner)
+            && CommonFunc::getSettingsString("DI_PASSWORD") == m_passwordEdit->text();
 }
 
 void UserInfoWidget::onUsernameTextChanged()
@@ -585,7 +520,7 @@ void UserInfoWidget::onUsernameEdited()
     m_usernameEdit->setAlert(false);
 
     // Be modified by caimc for bug 186377 in 2023/02/13
-    if (/*!m_isHostnameEditedManually && */!CommonFunc::getSettingsBool("DI_LOCK_HOSTNAME_CONFIG")) {
+    if (!m_isHostnameEditedManually && !CommonFunc::getSettingsBool("DI_LOCK_HOSTNAME_CONFIG")) {
         QString name = m_usernameEdit->text();
         if (!name.isEmpty()) {
             name = name.replace("_", "")

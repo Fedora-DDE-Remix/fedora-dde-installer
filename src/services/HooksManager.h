@@ -3,15 +3,14 @@
 
 #include "structs.h"
 
-#include <QThread>
 #include <QString>
+#include <QStringList>
 #include <QObject>
 
-#include <QSharedPointer>
 
 class HooksManagerPrivate;
 
-class HooksManager : public QThread {
+class HooksManager : public QObject {
     Q_OBJECT
 
 public:
@@ -36,8 +35,11 @@ private:
 
 private:
     static HooksManager *m_instance;
-    static bool m_started;
-    HooksManagerPrivate *d;         // 存储分区配置
+    bool m_started = false;
+    bool m_succeeded = false;
+    int m_progress = 0;
+    QString m_error;
+    QStringList m_directories;
 };
 
 

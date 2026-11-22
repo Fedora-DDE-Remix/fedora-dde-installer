@@ -1,0 +1,12 @@
+[Unit]
+Description=Prepare the Fedora DDE Live installer
+ConditionKernelCommandLine=rd.live.image
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=/usr/share/fedora-dde-installer/tools/fedora-dde-installer-preinit
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

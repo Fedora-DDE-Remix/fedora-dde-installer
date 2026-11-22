@@ -65,7 +65,7 @@ bool HostnameManager::checked(const QString &hostname, QString &err)
 
         if (part.startsWith('-')
             || part.endsWith('-')
-            || !QRegularExpression("[a-z0-9\\-]{1,63}", QRegularExpression::CaseInsensitiveOption).match(part).hasMatch()) {
+            || !QRegularExpression("^[a-z0-9\\-]{1,63}$", QRegularExpression::CaseInsensitiveOption).match(part).hasMatch()) {
             err = ::QObject::tr("Computer name can only contain letters, numbers, and dashes (-)"
                                 ", and cannot start or end with a dash (-)");
             return false;

@@ -159,8 +159,8 @@ void TimezoneFrame::onTimezoneMapUpdated(const QString& timezone)
 
 void TimezoneFrame::onResetButtonClicked()
 {
-    m_timezoneMap->setTimezone("Asia/Beijing");
-    m_selectTimeZoneFrame->setTimezone("Asia/Beijing");
+    m_timezoneMap->setTimezone("Asia/Shanghai");
+    m_selectTimeZoneFrame->setTimezone("Asia/Shanghai");
 }
 
 void TimezoneFrame::onSelectTimezoneUpdated(const QString &timezone)

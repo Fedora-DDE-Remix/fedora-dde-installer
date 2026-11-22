@@ -118,13 +118,11 @@ void SeniorTipDialog::setContentText()
     QString efiSize = QString::number(CommonFunc::getSettingsInt("DI_EFI_SIZE_CONFIG")) + "MiB";
     QString bootSize = QString::number(CommonFunc::getSettingsInt("DI_BOOT_SIZE_CONFIG") * 1.0 / 1024) + "GiB";
     QString rootSize = QString::number(CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG") * 1.0 / 1024) + "GiB";
-    QString persistentSize = QString::number(CommonFunc::getSettingsInt("DI_PERSISTENT_SIZE_CONFIG") * 1.0 / 1024) + "GiB";
     if (CommonFunc::isUEFI()) {
         addHelpText(::QObject::tr("/boot/efi Partition, Boot Partition"), QString(::QObject::tr("File System:%1\n").arg("vfat")) + QString(::QObject::tr("Size:At least %1\n").arg(efiSize)));
     }
     addHelpText(::QObject::tr("/boot Partition, Boot Partition"), QString(::QObject::tr("File System:%1\n").arg("ext4")) + QString(::QObject::tr("Size:At least %1\n").arg(bootSize)));
     addHelpText(::QObject::tr("/ Partition, Root Directory"), QString(::QObject::tr("File System: %1\n").arg("ext4")) + QString(::QObject::tr("Size: At least %1\n").arg(rootSize)));
-    addHelpText(::QObject::tr("/persistent Partition, Data Partition"), QString(::QObject::tr("File System: %1\n").arg("ext4")) + QString(::QObject::tr("Size: At least %1\n").arg(persistentSize)));
     addHelpText(::QObject::tr("/swap Partition, SWAP Partition"), QString(::QObject::tr("File System: %1\n").arg("linux-swap")) + QString(::QObject::tr("Size: Based on the amount of physical memory\n")));
 
 }

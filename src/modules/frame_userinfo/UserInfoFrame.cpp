@@ -5,7 +5,6 @@
 #include "PartitionOperateManager.h"
 #include "TimezoneFrame.h"
 #include "TitleWidget.h"
-#include "ModulesLoader.h"
 
 
 #include <QWidget>
@@ -13,6 +12,7 @@
 #include <QVBoxLayout>
 #include <QLabel>
 #include <DIconButton>
+#include <DDialog>
 #include <QListView>
 #include <QApplication>
 #include <libintl.h>
@@ -29,6 +29,8 @@ UserInfoFrame::UserInfoFrame(QWidget *parent)
     : FramePluginInterface (parent)
 {
     m_frameName = gFrameUserInfo;
+    hideBackButton();
+    hideCloseButton();
     // 初始化数据部分
     m_langItemList = CommonFunc::getLanguageList();
 
@@ -41,24 +43,11 @@ UserInfoFrame::UserInfoFrame(QWidget *parent)
 
 bool UserInfoFrame::load()
 {
-    return !CommonFunc::isGhost();
+    return true;
 }
 
 void UserInfoFrame::showEvent(QShowEvent *event)
 {
-    QString locale(CommonFunc::getSettingsString("DI_LOCALE"));
-
-    if (locale.isEmpty()) {
-        qWarning() << "Local language setting in config is empty";
-    }
-    else {
-        updateTimezoneConf(locale);
-
-        updateKeyboardLayoutConf(locale);
-    }
-
-    initLanguage();
-    initKeyboard();
     FramePluginInterface::showEvent(event);
 }
 
@@ -197,8 +186,8 @@ void UserInfoFrame::initUI()
     hLayout->addStretch();
 
     m_quickLogin = new DCheckBox;
-    m_quickLogin->setVisible(CommonFunc::getSettingsBool("DI_QUICK_LOGIN_LOAD"));
-    m_quickLogin->setChecked(CommonFunc::getSettingsBool("DI_QUICK_LOGIN"));
+    m_quickLogin->hide();
+    m_quickLogin->setChecked(false);
 
     // 主布局
     m_contentLayout->addLayout(titleMainLayout);
@@ -211,27 +200,14 @@ void UserInfoFrame::initUI()
     m_contentLayout->addSpacing(10);
     m_contentLayout->addLayout(hLayout);
     m_contentLayout->addSpacing(CommonFunc::getInnerMargin());
-    QTimer::singleShot(0, this, [this]() {
-        if (!CommonFunc::getSettingsString("DI_INSTALL_MODE").contains("no-first-boot")) {
-            dss::module::ModulesLoader::instance().start();
-        } else {
-            m_networkBtn->setVisible(false);
-        }
-    });
 
-    connect(&dss::module::ModulesLoader::instance(), &dss::module::ModulesLoader::moduleFound, this, &UserInfoFrame::addModule);
 }
 
 void UserInfoFrame::updateTs()
 {
     m_titleWidget->setTitleLabelProperty(::QObject::tr("Create Accounts"), "");
 
-    if (!searchDevice()) {
-        m_titleWidget->setTipsLabelProperty(::QObject::tr("Fill in the username, computer name and your password"), "font-size:16px;font-weight:Medium;");
-    } else {
-        // 指纹密码功能提示
-        m_titleWidget->setTipsLabelProperty(::QObject::tr("Add fingerprint passwords in Control Center to unlock and authenticate"));
-    }
+    m_titleWidget->setTipsLabelProperty(tr("The system is installed. Create your administrator account and computer name before restarting."), "font-size:16px;font-weight:Medium;");
 
     m_userInfoWidget->updateTs();
     m_quickLogin->setText(::QObject::tr("Quick Login"));
@@ -242,11 +218,13 @@ void UserInfoFrame::updateTs()
     m_networkBtn->setToolTip(::QObject::tr("Network"));
 }
 
-void UserInfoFrame::writeConf()
+bool UserInfoFrame::writeConf()
 {
-    m_userInfoWidget->writeConf();
+    if (!m_userInfoWidget->writeConf())
+        return false;
     CommonFunc::setSettingsValue("DI_QUICK_LOGIN",  m_quickLogin->isVisible() && m_quickLogin->isChecked());
     CommonFunc::setSettingsValue("DI_AVATAR", m_currentAvatarButton->avatar());
+    return true;
 }
 
 void UserInfoFrame::initKeyboard()
@@ -347,85 +325,18 @@ void UserInfoFrame::onLanguageMenuSelected(int index)
     }
 }
 
-void UserInfoFrame::addModule(dss::module::BaseModuleInterface *module)
-{
-    if (module->key() == "network-item-key") {
-        if (module && module->type() != dss::module::BaseModuleInterface::TrayType)
-            return;
-
-        m_networkModule = dynamic_cast<dss::module::TrayModuleInterface *>(module);
-        if (!m_networkModule)
-            return;
-
-        m_networkModule->init();
-
-        if (m_networkWidget == nullptr) {
-            m_networkWidget = new PopupWindow(this);
-            m_networkWidget->setContent(m_networkModule->content());
-            auto widgets = m_networkModule->content()->findChildren<QWidget*>();
-            QWidget *child = nullptr;
-            for (auto widget : widgets) {
-                if (widget && widget->accessibleName() == "tree_network") {
-                    child = widget;
-                    break;
-                }
-            }
-            if (child) {
-                QPalette pa = child->palette();
-                pa.setColor(QPalette::Normal, QPalette::BrightText, Qt::black);
-                child->setPalette(pa);
-            }
-
-            connect(m_networkWidget, &PopupWindow::contentDetach, this, [ this ] {
-                m_networkWidget->hide();
-            });
-        }
-
-        connect(m_networkBtn, &DIconButton::clicked, this, [this] {
-            auto netWidget = m_networkModule->content();
-            if (netWidget == nullptr) {
-                qWarning() << "network widget is null";
-                return;
-            }
-
-            netWidget->setParent(m_networkWidget);
-            netWidget->adjustSize();
-            m_networkWidget->resizeWithContent();
-            if (m_networkWidget->isVisible()) {
-                m_networkWidget->hide();
-            } else {
-                QWidget *content = m_networkWidget->getContent();
-                QJsonObject locale;
-                locale["locale"] = CommonFunc::getSettingsString("DI_LOCALE");
-                QJsonObject data;
-                data["data"] = locale;
-                QJsonDocument jsonDoc(data);
-                QString jsonString = jsonDoc.toJson(QJsonDocument::Compact);
-                auto errorMsg = m_networkModule->message(jsonString);
-                qWarning() << errorMsg;
-                content->adjustSize();
-                m_networkWidget->show(QPoint(m_networkBtn->pos().x() + m_networkBtn->width() / 2, m_networkBtn->pos().y() + 50));
-            }
-        });
-
-    }
-}
-
 void UserInfoFrame::onNextButtonClicked()
 {
-    // 后配置界面不弹安装确认弹窗
-//    if (!CommonFunc::isFirstBoot()) {
-//        InstallConfirmDialog installConfirmDialog;
-//        installConfirmDialog.setOperatorInfo(PartitionOperateManager::instance()->getPartedOperatorInfo());
-//        installConfirmDialog.setInitRecovery(PartitionOperateManager::instance()->isInitRecovery());
-//        if (installConfirmDialog.exec()  != QDialog::Accepted) {
-//            return;
-//        }
-//    }
-
-    // 写用户输入配置
-    writeConf();
-
+    if (!CommonFunc::installWorkflow().canEditUser())
+        return;
+    if (!writeConf()) {
+        DDialog dialog(this);
+        dialog.setTitle(tr("Could not save account details"));
+        dialog.setMessage(tr("The installer could not access its private configuration file. Account details have not been submitted."));
+        dialog.addButton(tr("OK"), true);
+        dialog.exec();
+        return;
+    }
     Q_EMIT next();
 }
 

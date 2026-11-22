@@ -48,6 +48,8 @@ SeniorPartitionFrame::SeniorPartitionFrame(QWidget *parent):PartitionFrameBase(p
     }, Qt::QueuedConnection);
 
     m_lvmCreate = new QPushButton(this);
+    m_lvmCreate->hide();
+    m_lvmCreate->setEnabled(false);
     m_lvmCreate->setFixedSize(130, 36);
     m_lvmCreate->setFocusPolicy(Qt::FocusPolicy::NoFocus);
     m_lvmFrame = new SeniorLVMFrame;
@@ -366,7 +368,10 @@ SeniorPartitionFrame::SeniorPartitionFrame(QWidget *parent):PartitionFrameBase(p
 
 void SeniorPartitionFrame::updateInstallInfo(const QMap<SDeviceInfo, QList<SPartitionInfo>> &devs, const QMap<SVGInfo, QList<SLVMInfo>> &vgs)
 {
-    m_model->setDatas(devs, vgs);
+    Q_UNUSED(vgs);
+    // This release installs to ordinary disk partitions. Existing volume groups
+    // are not offered as editable installation targets.
+    m_model->setDatas(devs, {});
     this->update();
 }
 
@@ -468,7 +473,7 @@ void SeniorPartitionFrame::decryptSinglePartition(const QString &partId, const Q
 void SeniorPartitionFrame::updateTs()
 {
     m_titleWidget->setTitleLabelProperty(::QObject::tr("Advanced"), "");
-    m_titleWidget->setTipsLabelProperty(::QObject::tr("You can freely allocate disk space, configure file systems and mount points, etc."), "font-size:16px;font-weight:Medium;");
+    m_titleWidget->setTipsLabelProperty(tr("Create a root filesystem and a separate ext4 /boot partition. Select formatting for both. UEFI also requires a FAT32 /boot/efi partition."), "font-size:16px;font-weight:Medium;");
 
     m_listReset->setText(::QObject::tr("Reset List"));
 
@@ -491,7 +496,8 @@ bool SeniorPartitionFrame::switchBack()
 
 void SeniorPartitionFrame::initDeviceInfo(const QMap<SDeviceInfo, QList<SPartitionInfo> > &devs, const QMap<SVGInfo, QList<SLVMInfo> > &vgs)
 {
-    m_model->setDatas(devs, vgs);
+    Q_UNUSED(vgs);
+    m_model->setDatas(devs, {});
     PartitionSeniorManager::instance()->clearCryptList();
     updateTips("");
     if (devs.isEmpty()) {
