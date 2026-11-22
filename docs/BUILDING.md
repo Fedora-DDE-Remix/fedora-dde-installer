@@ -118,10 +118,37 @@ installer/autostart configuration during finalization.
 ## Continuous integration and release verification
 
 The workflow first runs the non-destructive tests without GUI dependencies. A
-Fedora 45 container then installs the declared dependencies and builds source
-and binary RPMs for x86_64. Failure to resolve the COPR packages is reported as a
-build failure, rather than silently using substitute packages. aarch64 RPMs
-must be built on an aarch64 builder; the x86_64 CI result does not validate them.
+Fedora 45 container then builds the missing DTK Widget SDK RPM, installs the
+declared installer dependencies and builds source and binary RPMs for x86_64.
+Failure to resolve a required COPR package is a build failure. aarch64 RPMs must
+be built on an aarch64 builder; the x86_64 CI result does not validate them.
+
+The first public workflow run
+[`45019219116`](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45019219116)
+passed the safe tests but stopped at dependency resolution: `cmake(Dtk6Gui)` and
+`cmake(Dtk6Widget)` were unavailable to that Fedora 45 container. COPR build
+`11374228` produced `dtk6gui-devel-6.7.54-2.fc45` and its build log confirms the
+correct `cmake(Dtk6Gui)` provide; no Widget package had yet been built in that
+COPR project. This failure occurred before compiling the installer.
+
+The CI helper `.github/scripts/bootstrap-dtk-widget.sh` builds only that missing
+Widget SDK in the temporary container. Its inputs are fixed:
+
+| Input | Pinned value |
+|---|---|
+| Desktop recipe repository commit | `7b32215a3ada9664e52382247be9a5823bcc8617` |
+| Recipe | `dtkwidget/dtk6widget.spec`, unchanged |
+| Recipe SHA-256 | `a6fbab31190916d15293dbe728590a876afc88a320706edac1ff41ebc2f0c0c4` |
+| Upstream archive | `linuxdeepin/dtkwidget`, tag `6.7.54` |
+| Archive SHA-256 | `299c64f46c20f078a055f4b69242a9750c84be4558e1dce3af2aa53a66fcaead` |
+
+The helper refreshes repository metadata and requires the existing Gui and Log
+development RPMs before building Widget. It uses normal `dnf builddep`,
+`rpmbuild` and RPM dependency checks. The runtime/development SDK RPMs, SRPM,
+recipe, input checksums and build log are retained in a separate Actions
+artifact. Nothing is uploaded to COPR or another package repository. For an
+ISO test, include the matching runtime SDK RPMs along with the installer RPM;
+an Actions artifact is not itself an enabled software repository.
 
 CI never runs the installer against a host disk. Before publishing an ISO,
 verify it with disposable virtual disks and a complete installation cycle:

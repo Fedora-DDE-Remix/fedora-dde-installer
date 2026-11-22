@@ -34,12 +34,27 @@ jobs:
     needs: safe-tests
     steps:
       - name: Install build tooling
-        run: dnf -y install git rpm-build cmake gcc-c++ ninja-build dnf5-plugins
+        run: dnf -y install git curl rpm-build cmake gcc-c++ ninja-build dnf5-plugins
       - uses: actions/checkout@v4
       - name: Enable the project's DDE packages
         run: dnf -y copr enable mozixun/Fedora-DDE-Remix
+      - name: Build the missing pinned DTK Widget SDK RPM
+        shell: bash
+        run: bash .github/scripts/bootstrap-dtk-widget.sh
+      - name: Save the SDK RPMs and input checksums
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dtk6widget-6.7.54-fedora-45-x86_64
+          path: |
+            sdk-rpmbuild/RPMS/**/*.rpm
+            sdk-rpmbuild/SRPMS/*.rpm
+            sdk-rpmbuild/SPECS/*.spec
+            sdk-rpmbuild/SOURCES.lock
+            sdk-rpmbuild/build.log
+          if-no-files-found: warn
       - name: Install declared build dependencies
-        run: dnf -y builddep packaging/fedora-dde-installer.spec
+        run: dnf -y --refresh builddep packaging/fedora-dde-installer.spec
       - name: Build the current commit as source and binary RPMs
         shell: bash
         run: |

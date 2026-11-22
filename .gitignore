@@ -4,6 +4,7 @@
 /cmake-build-*/
 /stage/
 /rpmbuild/
+/sdk-rpmbuild/
 /CMakeFiles/
 /CMakeCache.txt
 /cmake_install.cmake

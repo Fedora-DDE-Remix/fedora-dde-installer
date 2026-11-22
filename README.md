@@ -45,8 +45,11 @@
 模拟测试，以及启动脚本语法、资源路径和打包配置检查。
 
 **完整 Qt 6 / DTK 6 GUI 编译、Fedora RPM 构建、Live ISO 虚拟机安装及首次启动
-尚未完成验证。** 安全测试通过不代表 ISO 已能成功安装或启动。GitHub Actions
-配置了实际的 Fedora 45 RPM 构建任务，依赖缺失或编译失败会使任务失败。
+尚未完成验证。** 安全测试通过不代表 ISO 已能成功安装或启动。首轮 GitHub
+Actions 安全测试通过，RPM 任务停在 DTK Gui/Widget 依赖解析，尚未开始编译安装器。
+CI 现在使用固定配方和校验过的上游源码，在临时 Fedora 45 容器中补构建缺失的
+Widget SDK RPM；Gui 等既有依赖仍须从仓库正常解析。SDK 产物单独保存，整个过程
+不修改 COPR。依赖缺失或编译失败会使任务失败，详细输入记录见构建文档。
 
 发布可供安装的 ISO 前，需要使用可丢弃的虚拟磁盘完成安装、同会话账户配置、
 移除 ISO 后启动、DDM 登录、DNF 更新和 SELinux 检查；UEFI、BIOS、aarch64
