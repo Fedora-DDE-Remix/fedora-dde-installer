@@ -66,9 +66,10 @@ Wi-Fi/VPN，不执行 Anaconda/Kickstart 的任意安装后脚本。差异、ISO
 [安装器构建产物](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45055520645/artifacts/14767373498)
 包含主 RPM、SRPM、debuginfo 和 debugsource。
 
-配套 DDM `0.5.0-6` 也已[构建成功并核对 RPM 内的 PAM/preset 文件](https://github.com/Fedora-DDE-Remix/Deepin-Desktop-Environment/actions/runs/45050056498)，
-[DDM 产物在此下载](https://github.com/Fedora-DDE-Remix/Deepin-Desktop-Environment/actions/runs/45050056498/artifacts/14764983663)。
-这些是 Actions 构建产物；本轮没有向 COPR 提交新版 DDM 构建或发布仓库元数据。
+0.2.1 新增供本次 Fedora 45 x86_64 测试 ISO 使用的显式配置：保留维护者的
+DDM `0.5.0-5`，由 ISO 自己的配置 RPM 提供 Fedora PAM 桥接，并明确禁用 SELinux。
+本版不依赖此前的 DDM 6 配方，也不修改或重建维护者的桌面仓库。
+上面的 GUI/RPM 构建记录属于 0.2.0，不能当作 0.2.1 或新 ISO 的运行验证。
 
 **Live ISO 虚拟机安装、移除 ISO 后首次启动及 aarch64 构建尚未完成验证。**
 已通过的工作流及后端测试不会操作真实磁盘。
@@ -149,10 +150,9 @@ rpmbuild --define "_topdir $PWD/rpmbuild" \
 `fedora-dde-installer`。基础镜像需要是普通 Fedora RPM 根文件系统，并提供可写的
 Live 运行环境。镜像应包含 DDE/DDM/Treeland、目标内核、对应架构的引导软件包、
 SELinux 策略及文件标签、所需 `glibc-langpack-*`、kbd 键盘/字体数据和 SPEC 声明的运行依赖。
-特别需要 `ddm >= 0.5.0-6` 的 Fedora PAM 配方、`zram-generator-defaults`、
-`dracut-config-rescue` 和有效的 Fedora kernel-install 钩子。DDM 配方位于
-[桌面软件包仓库](https://github.com/Fedora-DDE-Remix/Deepin-Desktop-Environment/tree/main/ddm)；
-配方提交、RPM 构建、COPR 仓库发布是三个不同步骤，不能只更新 SPEC 就宣称依赖可安装。
+特别需要与所选 profile 匹配的 DDM PAM 栈、`zram-generator-defaults`、
+`dracut-config-rescue` 和有效的 Fedora kernel-install 钩子。安装器依赖维护者提供的
+`ddm >= 0.5.0-5`；缺少可用 PAM 栈时仍会在分区前停止。
 
 Live 镜像需通过 Fedora dracut Live 启动路径启动，内核参数包含 `rd.live.image`
 或 `root=live:`。桌面中的“安装 Fedora DDE Remix”入口执行
@@ -162,8 +162,30 @@ Live 镜像需通过 Fedora dracut Live 启动路径启动，内核参数包含 
 
 `DI_SOURCE_ROOT=auto` 自动从 Fedora Live 基础设备独立挂载只读源，支持带正确标签的
 EROFS/SquashFS 或普通 Fedora Live 根镜像；不会把正在运行的 `/` 当作源。
-调试时显式指定的源也必须是独立只读挂载。Live 内核必须启用 SELinux；
-允许 permissive 模式，拒绝 `selinux=0`，避免标签工具成功退出却没有实际标记文件。
+调试时显式指定的源也必须是独立只读挂载。默认 profile 要求 Live 内核启用
+SELinux，允许 permissive 模式，并要求已标记且配置为 enforcing 的 payload。
+
+### 本次测试 ISO：禁用 SELinux、保留 DDM 5
+
+ISO-Build 在原始只读 payload 中安装 root 拥有、其他用户不可写的
+`/etc/fedora-dde-installer/install-profile.json`：
+
+```json
+{"schema":1,"selinux":"disabled","pam":"ddm-system-login"}
+```
+
+同时将 payload 的 `/etc/selinux/config` 设为 `SELINUX=disabled`，Live 引导使用
+`selinux=0`。安装器把这个选择绑定到安装状态，保留 ACL 和文件 capabilities，
+跳过 SELinux 标签复制及 relabel，并为安装后的普通和救援启动项写入 `selinux=0`。
+未提供这个文件的镜像仍使用默认 enforcing profile；运行环境变量不能启用例外。
+复制时仍排除安装器运行配置和密码，只将已验证的 profile 规范化写入目标，保留
+ISO 配置 RPM 的配置文件；后续策略继续使用安装状态中保存的选择。
+
+ISO 自己的配置 RPM 仅新增 `/etc/pam.d/system-login`，接入 Fedora 的
+`password-auth`、`postlogin` 和完整 session 栈，不覆盖 DDM 拥有的 PAM 文件。
+本版 Live 通过 DDM **手动登录 `liveuser` / `liveuser`**；不使用 DDM 5 中不兼容的
+`ddm-autologin`。正式安装账户必须设置自己的密码，且不能属于 `nopasswdlogin` 组。
+完整 profile 契约与 PAM 桥内容见 [构建文档](docs/BUILDING.md#explicit-test-iso-profile)。
 
 目标系统完成账户配置后，会移除安装器和 Live 专用启动配置，保留正常 DDM 登录。
 初次集成应先生成测试 ISO，在虚拟机中验证完整流程，再提供安装镜像下载。

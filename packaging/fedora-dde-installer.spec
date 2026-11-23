@@ -1,5 +1,5 @@
 Name:           fedora-dde-installer
-Version:        0.2.0
+Version:        0.2.1
 Release:        0.1%{?dist}
 Summary:        Fedora DDE Remix graphical Live installer
 License:        GPL-3.0-or-later
@@ -62,7 +62,7 @@ Requires:       xorg-x11-server-Xwayland
 Requires:       systemd
 Requires:       systemd-udev
 Requires:       zram-generator-defaults
-Requires:       ddm >= 0.5.0-6
+Requires:       ddm >= 0.5.0-5
 %ifarch x86_64
 Requires:       grub2-efi-x64
 Requires:       shim-x64
@@ -122,6 +122,11 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_unitdir}/%{name}.service
 
 %changelog
+* Mon Nov 23 2026 Fedora DDE Remix contributors - 0.2.1-0.1
+- Support an explicit read-only image profile for the SELinux-disabled test ISO.
+- Validate the maintainer's DDM 5 password-login stack with an ISO-owned Fedora bridge.
+- Keep enforcing SELinux and direct Fedora PAM checks as the default policy.
+
 * Mon Nov 23 2026 Fedora DDE Remix contributors - 0.2.0-0.1
 - Install a validated read-only Fedora Live base with Btrfs root/home and zram.
 - Use Fedora kernel-install, rescue hooks, dracut and EFI configuration tools.

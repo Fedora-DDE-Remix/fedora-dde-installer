@@ -221,11 +221,14 @@ class Backend:
         return self.run("chroot", str(self.target), *args, **kwargs)
 
     def load(self, *phases: str) -> None:
+        from fedora_profile import state_profile
+
         require(self.state_file.is_file() and not self.state_file.is_symlink(),
                 "No installation from this Live session is available.")
         self.state = json.loads(self.state_file.read_text())
         require(self.state.get("boot_id") == self.boot_id and self.state.get("target") == str(self.target),
                 "The installation target belongs to a different session.")
+        state_profile(self.state)
         if phases:
             require(self.state.get("phase") in phases,
                     f"Cannot run this step while installation is {self.state.get('phase', 'unknown')}.")
@@ -306,6 +309,7 @@ class Backend:
     def preflight(self) -> None:
         from fedora_boot import firmware_suffix
         from fedora_payload import prepare_source, release_source, rooted_path
+        from fedora_profile import selinux_disabled
         from fedora_storage import validate_layout
         if self.state_file.exists():
             self.load()
@@ -344,8 +348,9 @@ class Backend:
         source = Path(source_state["source"])
         try:
             require(rooted_path(source, "usr/lib/systemd/system/ddm.service").is_file(), "The Live image must include DDM.")
-            require(rooted_path(source, "etc/selinux/targeted/contexts/files/file_contexts").is_file(),
-                    "The Live image must include selinux-policy-targeted.")
+            if not selinux_disabled(source_state):
+                require(rooted_path(source, "etc/selinux/targeted/contexts/files/file_contexts").is_file(),
+                        "The Live image must include selinux-policy-targeted.")
             suffix = firmware_suffix(architecture) if uefi else ""
             if uefi:
                 self.efi_file(f"shim-{suffix}", f"shim{suffix}.efi", root=source)
@@ -466,7 +471,7 @@ class Backend:
         require(bool(re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", live_user)), "Invalid Live username.")
         self.state["live_user"] = live_user
         # The image's live-only service must never take over the installed login.
-        for unit in ("livesys.service", "livesys-late.service", "fedora-dde-installer.service"):
+        for unit in ("livesys.service", "livesys-late.service", "fedora-dde-live.service", "fedora-dde-installer.service"):
             self.run("systemctl", "--root", str(self.target), "disable", unit, check=False)
         for pattern in ("etc/sddm.conf", "etc/sddm.conf.d/*.conf", "etc/gdm/custom.conf",
                         "etc/lightdm/lightdm.conf", "etc/lightdm/lightdm.conf.d/*.conf",
@@ -532,12 +537,12 @@ class Backend:
         self.save()
 
     def configure_fedora_pam(self) -> None:
+        from fedora_profile import state_profile
         from fedora_system import verify_fedora_pam
 
-        # Fedora's DDM RPM supplies its own PAM configuration. Keep that file,
-        # authselect's profile and the payload's SELinux policy intact so future
-        # RPM upgrades manage them normally, including configurable autologin.
-        verify_fedora_pam(self.target)
+        # Keep the DDM RPM's files and the ISO RPM's optional Fedora bridge
+        # package-managed. The explicit DDM 5 profile uses password login only.
+        verify_fedora_pam(self.target, state_profile(self.state)["pam"])
 
     def install_kernels(self) -> None:
         from fedora_boot import install_kernels
@@ -576,6 +581,7 @@ class Backend:
         print("System files are installed. The target remains mounted for account configuration.", flush=True)
 
     def configure(self) -> None:
+        from fedora_profile import state_profile
         from fedora_system import console_font, console_keymap
 
         self.load("awaiting-user", "configuring-user", "user-configured", "finalized")
@@ -591,6 +597,8 @@ class Backend:
                 "DI_REGION_FORMAT_LOCALE_SET")
         account = validate_account({key: self.config.get(key) for key in keys})
         user = account["user"]
+        legacy_pam = state_profile(self.state)["pam"] == "ddm-system-login"
+        require(not legacy_pam or user != "nopasswdlogin", "Choose a username outside DDM's passwordless-login group.")
         require(not self.state.get("user") or self.state["user"] == user,
                 "An account was already created; retry configuration with the same username.")
         zone = self.path("usr/share/zoneinfo/" + account["timezone"])
@@ -638,6 +646,10 @@ class Backend:
             self.chroot("useradd", "--create-home", "--user-group", "--shell", "/bin/bash", "--groups", "wheel", user)
         else:
             self.chroot("usermod", "--append", "--groups", "wheel", "--shell", "/bin/bash", user)
+        if legacy_pam:
+            groups = self.chroot("id", "--name", "--groups", user).stdout.split()
+            require(bool(groups) and "nopasswdlogin" not in groups,
+                    "The installed user must not belong to DDM's passwordless-login group.")
         self.chroot("install", "-d", "-m", "0700", "-o", user, "-g", user, f"/home/{user}")
         self.chroot("chpasswd", input_text=f"{user}:{account['password']}\n")
         # As in Anaconda, an unset password-change date avoids a broken RTC
@@ -712,7 +724,12 @@ class Backend:
                 path.unlink()
 
     def relabel(self) -> None:
-        from fedora_system import target_path
+        from fedora_profile import selinux_disabled
+        from fedora_system import target_path, verify_selinux_config
+
+        if selinux_disabled(self.state):
+            verify_selinux_config(self.target, "disabled")
+            return
 
         config = self.path("etc/selinux/config")
         policy = re.search(r"(?m)^\s*SELINUXTYPE\s*=\s*([A-Za-z0-9_-]+)\s*(?:#.*)?$",
@@ -739,6 +756,9 @@ class Backend:
                             home + "/.config/locale.conf", capture=False)
 
     def finalize(self) -> None:
+        from fedora_profile import selinux_disabled, state_profile
+        from fedora_system import verify_selinux_config
+
         self.load("user-configured", "finalized")
         if self.state["phase"] == "finalized":
             self.config.set("DI_TARGET_STAGE", "complete")
@@ -749,12 +769,16 @@ class Backend:
         for key in SECRET_KEYS:
             self.config.set(key, "")
         if not self.state.get("summary_written"):
+            if selinux_disabled(self.state):
+                verify_selinux_config(self.target, "disabled")
             self.write("var/log/fedora-dde-installer/install-summary.json", json.dumps({
                 "installation_id": self.state["installation_id"], "architecture": self.state["architecture"],
                 "uefi": self.state["uefi"], "kernels": self.state.get("kernels", []),
                 "firmware_fallback": self.state.get("firmware_fallback", False),
+                "install_profile": state_profile(self.state),
                 "keyboard": self.state.get("keyboard", {}), "status": "configured"}, indent=2) + "\n", 0o600)
-            self.chroot("restorecon", "-ir", "/var/log/fedora-dde-installer", capture=False)
+            if not selinux_disabled(self.state):
+                self.chroot("restorecon", "-ir", "/var/log/fedora-dde-installer", capture=False)
             # A retry may already have unmounted a separate /var. Do not write
             # through its former mount point into the filesystem underneath.
             self.state["summary_written"] = True

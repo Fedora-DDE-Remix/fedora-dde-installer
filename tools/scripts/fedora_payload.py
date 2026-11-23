@@ -57,11 +57,16 @@ def mount_info(backend, path: Path) -> dict:
     return {key: entry.get(key) for key in ("source", "maj:min", "fstype", "uuid", "fsroot")}
 
 
-def validate_root(backend, source: Path) -> dict:
+def validate_root(backend, source: Path, *, expected_profile: dict | None = None) -> dict:
+    from fedora_profile import read_profile
+
     require(source.is_absolute() and source.is_dir() and not source.is_symlink(), "Invalid Fedora source root.")
     require(source.resolve() != Path("/") and not source.resolve().is_relative_to(backend.target.resolve()),
             "The running system and the installation target cannot be used as an image source.")
     identity = mount_info(backend, source)
+    profile = read_profile(source)
+    if expected_profile is not None:
+        require(profile == expected_profile, "The installation image profile changed after preflight.")
     metadata = rooted_path(source, "etc/os-release")
     require(metadata.is_file(), "The source has no operating system metadata.")
     values = {}
@@ -75,22 +80,25 @@ def validate_root(backend, source: Path) -> dict:
     require(any((source / "usr/lib/modules").glob("*/vmlinuz"))
             or any((source / "usr/lib/modules").glob("*/vmlinuz-dtbloader.efi")),
             "The image does not contain a supported installed kernel.")
-    for name in ("rpm", "dnf", "systemctl", "dracut", "chpasswd", "useradd", "userdel", "usermod", "chage",
-                 "grub2-mkconfig", "grub2-editenv", "grubby", "kernel-install", "systemd-machine-id-setup",
-                 "depmod", "restorecon"):
+    commands = ("rpm", "dnf", "systemctl", "dracut", "chpasswd", "useradd", "userdel", "usermod", "chage",
+                "grub2-mkconfig", "grub2-editenv", "grubby", "kernel-install", "systemd-machine-id-setup", "depmod")
+    if profile["selinux"] == "enforcing":
+        commands += ("restorecon",)
+    if profile["pam"] == "ddm-system-login":
+        commands += ("id",)
+    for name in commands:
         require(any(rooted_path(source, prefix + name).is_file() for prefix in ("usr/bin/", "usr/sbin/")),
                 f"The Live base image is missing {name}; include it when composing the ISO.")
     require(rooted_path(source, "usr/lib/systemd/zram-generator.conf").is_file()
             or rooted_path(source, "etc/systemd/zram-generator.conf").is_file(),
             "Include zram-generator-defaults in the Live image for Fedora's default swap policy.")
-    from fedora_system import verify_fedora_pam, verify_selinux_source
-    verify_fedora_pam(source)
-    verify_selinux_source(source)
+    from fedora_system import verify_fedora_pam, verify_selinux_config, verify_selinux_source
+    verify_fedora_pam(source, profile["pam"])
+    if profile["selinux"] == "enforcing":
+        verify_selinux_source(source)
     from fedora_boot import verify_kernel_hooks
     verify_kernel_hooks(source)
-    selinux = rooted_path(source, "etc/selinux/config")
-    require(selinux.is_file() and re.search(r"^\s*SELINUX\s*=\s*enforcing\s*$", selinux.read_text(), re.M),
-            "The Live base must contain Fedora's SELinux enforcing configuration.")
+    verify_selinux_config(source, profile["selinux"])
     return identity
 
 
@@ -114,10 +122,13 @@ def detect_live_device(backend) -> str:
 
 
 def prepare_source(backend) -> dict:
+    from fedora_profile import read_profile
+
     configured = backend.config.get("DI_SOURCE_ROOT", "auto")
     if configured not in ("", "auto"):
         source = Path(configured)
         return {"source": str(source), "source_identity": validate_root(backend, source),
+                "install_profile": read_profile(source),
                 "source_mount_owned": False, "source_mounted_this_call": False}
     device = detect_live_device(backend)
     backend.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -138,11 +149,15 @@ def prepare_source(backend) -> dict:
             backend.run("umount", str(source), check=False)
         raise
     return {"source": str(source), "source_identity": identity,
+            "install_profile": read_profile(source),
             "source_mount_owned": True, "source_mounted_this_call": created}
 
 
 def verify_source(backend) -> None:
-    require(validate_root(backend, Path(backend.state["source"])) == backend.state.get("source_identity"),
+    from fedora_profile import state_profile
+
+    require(validate_root(backend, Path(backend.state["source"]), expected_profile=state_profile(backend.state))
+            == backend.state.get("source_identity"),
             "The installation image was unmounted or replaced.")
 
 
@@ -155,6 +170,8 @@ def release_source(backend) -> None:
 
 
 def copy_payload(backend) -> None:
+    from fedora_profile import PROFILE_PATH, selinux_disabled, state_profile
+
     verify_source(backend)
     source = Path(backend.state["source"])
     exclusions = ["/dev/***", "/proc/***", "/sys/***", "/run/***", "/tmp/***", "/mnt/***", "/media/***",
@@ -167,6 +184,11 @@ def copy_payload(backend) -> None:
     require(bool(re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", live_user)), "Invalid Live username.")
     exclusions.append(f"/home/{live_user}/***")
     command = ["rsync", "-aHAX", "--numeric-ids", "--one-file-system", "--info=progress2", "--no-inc-recursive"]
+    if selinux_disabled(backend.state):
+        # Custom xattr rules replace rsync's default namespace filtering.
+        # Keep capabilities and ACLs; exclude only SELinux and the default
+        # system namespace (ACLs are handled independently by -A).
+        command += ["--filter=-x system.*", "--filter=-x security.selinux"]
     command += [f"--exclude={item}" for item in exclusions]
     command += [str(source) + "/", str(backend.target) + "/"]
     backend.runner.run(command, capture=False)
@@ -196,3 +218,12 @@ def copy_payload(backend) -> None:
         require(not path.is_symlink(), "The payload contains an unsafe runtime directory.")
         path.mkdir(mode=mode, parents=True, exist_ok=True)
         path.chmod(mode)
+    if (source / PROFILE_PATH).is_file():
+        # Keep the ISO RPM's declared profile, but never copy runtime settings
+        # or secrets from this otherwise excluded directory. Policy continues
+        # to come from the already validated state, not from this target copy.
+        directory = backend.path("etc/fedora-dde-installer")
+        require(not directory.is_symlink(), "The target profile directory must not be a symlink.")
+        directory.mkdir(mode=0o755, parents=True, exist_ok=True)
+        directory.chmod(0o755)
+        backend.write(PROFILE_PATH, json.dumps(state_profile(backend.state), indent=2) + "\n", 0o644)

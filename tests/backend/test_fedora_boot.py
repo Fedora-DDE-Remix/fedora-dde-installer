@@ -12,6 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/scripts"))
 import fedora_backend as backend
 import fedora_boot as boot
+from profile_fixtures import ISO_PROFILE
 
 
 TEST_MACHINE_ID = "1234567890abcdef1234567890abcdef"
@@ -166,6 +167,27 @@ class FedoraBootTests(unittest.TestCase):
         self.assertEqual(args[-2:], ["rhgb", "quiet"])
         self.assertFalse(any(arg.startswith(("rd.live", "root=live:", "rd.luks", "inst.", "selinux=", "enforcing=")) for arg in args))
         self.assertEqual((self.target / "etc/modprobe.d/anaconda-denylist.conf").read_text(), "blacklist nouveau\nblacklist floppy\n")
+
+    def test_explicit_disabled_profile_reaches_normal_and_rescue_bls(self):
+        self.backend.state["install_profile"] = dict(ISO_PROFILE)
+        self.backend.state["live_kernel_cmdline"] += " selinux=1 enforcing=1"
+        self.runner.write("etc/selinux/config", "SELINUX=disabled\nSELINUXTYPE=targeted\n")
+        self.prepare_boot()
+        for relative in ("etc/default/grub", "etc/kernel/cmdline",
+                         f"boot/loader/entries/{TEST_MACHINE_ID}-{TEST_KERNEL}.conf",
+                         f"boot/loader/entries/{TEST_MACHINE_ID}-0-rescue.conf"):
+            with self.subTest(relative=relative):
+                contents = (self.target / relative).read_text()
+                self.assertEqual(contents.count("selinux=0"), 1)
+                self.assertNotIn("selinux=1", contents)
+                self.assertNotIn("enforcing=1", contents)
+
+    def test_disabled_boot_generation_rejects_mismatched_target_policy(self):
+        self.backend.state["install_profile"] = dict(ISO_PROFILE)
+        self.runner.write("etc/selinux/config", "SELINUX=enforcing\n")
+        with self.assertRaisesRegex(backend.InstallError, "SELINUX=disabled"):
+            self.prepare_boot()
+        self.assertEqual(self.runner.calls, [])
 
     def test_console_order_and_graphical_boot(self):
         self.backend.state["live_kernel_cmdline"] = "console=tty0 console=ttyS0,115200n8 console=ttyS1,9600"

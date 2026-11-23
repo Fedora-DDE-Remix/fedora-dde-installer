@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/scripts"))
 import fedora_backend as backend
 import fedora_payload as payload
 import fedora_system as system
+from profile_fixtures import ISO_PROFILE
 
 
 class FakeConfig:
@@ -255,6 +256,17 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(backend.InstallError):
             self.backend.finalize()
         self.assertEqual(self.runner.calls, [])
+
+    def test_disabled_final_summary_records_profile_without_restorecon(self):
+        self.backend.state.update(install_profile=dict(ISO_PROFILE), user="alice")
+        self.backend.save("user-configured")
+        (self.target / "etc/selinux/config").write_text("SELINUX=disabled\n")
+        with mock.patch.object(backend.os.path, "ismount", return_value=False), contextlib.redirect_stdout(io.StringIO()):
+            self.backend.finalize()
+        summary = json.loads((self.target / "var/log/fedora-dde-installer/install-summary.json").read_text())
+        self.assertEqual(summary["install_profile"], ISO_PROFILE)
+        self.assertEqual(self.backend.state["phase"], "finalized")
+        self.assertFalse(any("restorecon" in command for command, _ in self.runner.calls))
 
     def test_finalize_retry_does_not_require_password(self):
         self.backend.configure()

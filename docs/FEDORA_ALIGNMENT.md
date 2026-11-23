@@ -56,16 +56,22 @@
 - 普通 Fedora 45 Live 镜像，提供支持的只读基础设备，不是 OSTree 部署。
 - 可用的目标内核、`kernel-install`、GRUB、dracut 和 rescue 钩子。UKI-only compose
   中用空文件屏蔽 `20-grub.install` 或 `50-dracut.install` 的产物不能直接用作此 payload。
-- Fedora DDM `0.5.0-6` 或更新版本的 PAM 配方。仅改安装器中的 Requires 不会构建
-  或发布 DDM，软件源或 ISO 构建输入必须实际包含新版 RPM。
-- 已启用的 SELinux 内核接口；Live 可以 permissive，但不能以 `selinux=0` 关闭 LSM。
+- 默认 profile 要求直接接入 Fedora 的 DDM PAM 栈，不根据 RPM 版本号推断可登录。
+- 默认 profile 要求已启用的 SELinux 内核接口；Live 可以 permissive，但不能以 `selinux=0` 关闭 LSM。
   payload 的关键文件必须有正确的 `security.selinux` 标签，目标配置为 enforcing。
-  当前实现不支持没有 SELinux 标签的 EROFS/SquashFS 镜像。
+  默认 profile 不支持没有 SELinux 标签的 EROFS/SquashFS 镜像。
 - `zram-generator-defaults`、所需 `glibc-langpack-*`、kbd 键盘与字体数据、DDE/DDM/
   Treeland 和安装器 SPEC 列出的工具。选择某语言前仍会验证该语言和字体是否存在。
 
 调试配置 `DI_SOURCE_ROOT` 默认为 `auto`。显式指定的路径也必须是独立只读挂载，
 安装器不会卸载用户自己提供的源。自动挂载的源只在核验身份后释放。
+
+0.2.1 为本次 Fedora 45 x86_64 测试 ISO 增加了明确例外：只读 payload 中的
+root-owned `install-profile.json` 选择禁用 SELinux，并通过 ISO 自有 `system-login`
+桥接使用维护者 DDM 5 的普通密码登录。默认 profile 不变，DDM 原 PAM 文件不改，
+Live 使用 `liveuser` / `liveuser` 手动登录，不启用 DDM 5 自动登录。
+这项明确选择不再声称与 Fedora 默认 enforcing 策略相同；配置契约、复制和引导行为见
+[BUILDING.md](BUILDING.md#explicit-test-iso-profile)。
 
 ## 仍然存在的差异
 

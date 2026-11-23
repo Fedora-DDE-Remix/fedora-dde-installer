@@ -89,7 +89,7 @@ rpmbuild --define "_topdir $PWD/rpmbuild" \
 
 Uncommitted edits are not included in `git archive`. To publish a release, update
 the SPEC to use an immutable release tag and record the source commit. The
-current `0.2.0-0.1` package is a development build, not a release qualification.
+current `0.2.1-0.1` package is a development build, not a release qualification.
 
 ## Installed layout
 
@@ -139,23 +139,87 @@ contains `fedora-dde-installer-0.2.0-0.1.fc45.x86_64.rpm`, its SRPM, debuginfo a
 debugsource. The archive SHA-256 is
 `41163a0c10d26d678ae8b23ebce63199699e4e561a5bb9826665437b5aaa0a2d`.
 
-The matching Fedora PAM recipe produced `ddm-0.5.0-6.fc45.x86_64.rpm` in
-[DDM run 45050056498](https://github.com/Fedora-DDE-Remix/Deepin-Desktop-Environment/actions/runs/45050056498)
-at commit `75a1dc8602ef1d8ee09b9258ada23cfa5ee7f987`. That job extracted and
-compared both PAM files and the systemd preset from the main RPM. Its
-[artifact](https://github.com/Fedora-DDE-Remix/Deepin-Desktop-Environment/actions/runs/45050056498/artifacts/14764983663)
-also contains the recipe, input hashes, dependency list and source commit.
+Version 0.2.1 adds the explicit test-image profile described below. It uses the
+maintainer's DDM 0.5.0-5 with an ISO-owned PAM bridge; the earlier DDM 6 recipe
+is not an input to this image. Do not modify or rebuild the separately maintained
+desktop repository. The 0.2.0 build above does not validate 0.2.1 or the new ISO.
 
 These Actions workflows do not submit COPR builds or publish repository
-metadata. Supply the verified DDM RPM to the ISO compose, or rebuild and publish
-the updated DDM recipe in COPR before resolving the installer's runtime
-requirements there. A runtime upgrade inside a running Live session does not
-change the original read-only payload; compose the required versions into the
-image itself. See [FEDORA_ALIGNMENT.md](FEDORA_ALIGNMENT.md) for payload
-prerequisites and the remaining Anaconda comparison items.
+metadata. `dnf builddep` checks build dependencies; image integration must also
+install the output installer RPM and resolve its runtime dependencies. A runtime
+upgrade inside a running Live session does not change the original read-only
+payload; compose the required packages and profile into the image itself.
+See [FEDORA_ALIGNMENT.md](FEDORA_ALIGNMENT.md) for the default payload
+prerequisites and remaining Anaconda comparison items.
 
 Live-image installation, DDM login, target-system boot, Secure Boot and aarch64
 have not yet been validated by these jobs.
+
+## Explicit test ISO profile
+
+The Fedora 45 x86_64 test ISO explicitly disables SELinux and retains the
+maintainer's DDM 0.5.0-5. Its configuration RPM installs this file in the original
+read-only payload, not only in the running Live overlay:
+
+`/etc/fedora-dde-installer/install-profile.json`
+
+```json
+{"schema":1,"selinux":"disabled","pam":"ddm-system-login"}
+```
+
+The file and its parent directories must be root-owned, not writable by group
+or other users, and not symlinks; mode 0644 is suitable for the file. Unknown
+keys, schema versions, policy combinations and duplicate JSON keys are rejected.
+An absent file selects `enforcing` with the direct Fedora DDM PAM stack.
+Environment variables and Live kernel arguments cannot select the exception.
+The selected profile is saved with the source identity and rechecked before
+partitioning/copying. Later stages use that saved selection after source unmount.
+Copying excludes all installer runtime settings, then writes only the verified
+profile as normalized JSON with mode 0644 into the target. This preserves the
+ISO RPM's configuration file without importing passwords or trusting a target
+file to select policy. Keep that configuration RPM installed: it also owns the
+PAM bridge required for normal DDM login.
+
+The payload must have `SELINUX=disabled` in `/etc/selinux/config`; the ISO's Live
+kernel command line must include `selinux=0`. The installer preserves ACLs and
+file capabilities while excluding the `security.selinux` xattr, skips both
+restorecon passes, and writes `selinux=0` to the installed normal and rescue BLS
+entries and `/etc/kernel/cmdline`. SELinux utilities/policy RPMs remain installed
+so the default enforcing profile retains its dependencies.
+
+The ISO configuration RPM owns only the additional `/etc/pam.d/system-login`
+bridge below. DDM's `/etc/pam.d/ddm` and `/etc/pam.d/ddm-autologin` stay unchanged.
+The installer checks the exact effective rows, permitting comments/whitespace:
+
+```pam
+auth substack password-auth
+auth include postlogin
+account required pam_nologin.so
+account include password-auth
+password include password-auth
+session required pam_selinux.so close
+session required pam_loginuid.so
+session required pam_selinux.so open
+session optional pam_keyinit.so force revoke
+session required pam_namespace.so
+session include password-auth
+session include postlogin
+```
+
+Fedora's `password-auth` and `postlogin` must resolve within the payload. Validate
+the generated authselect configuration and real password authentication when
+composing the image; file-presence tests alone are not a login test. The Live
+session uses a manual DDM login with `liveuser` / `liveuser`. Do not configure
+DDM 5 autologin: its `@include` syntax is incompatible with Fedora PAM.
+Installed users receive their chosen nonempty password and `wheel` membership;
+the backend rejects membership in DDM's `nopasswdlogin` group. Finalization
+disables the ISO's `fedora-dde-live.service` and removes Live account settings.
+
+Test both profiles: the default must still reject an inactive SELinux LSM or
+unlabelled payload; the opt-in must reject malformed/untrusted profiles, changed
+source policy, incomplete/altered PAM bridges and mismatched target SELinux
+configuration. Verify the ISO and installed system with disposable VM disks;
+the mock tests do not prove DDM login or target boot.
 
 Earlier dependency failures were caused by unpublished repository metadata:
 the COPR project used `devel_mode`, and its Gui/Widget builds completed after

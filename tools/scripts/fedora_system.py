@@ -17,6 +17,38 @@ KEYMAP_DIRS = ("usr/lib/kbd/keymaps", "usr/share/kbd/keymaps", "usr/share/keymap
 FONT_DIRS = ("usr/lib/kbd/consolefonts", "usr/share/kbd/consolefonts", "usr/share/consolefonts")
 NAME = re.compile(r"[A-Za-z0-9_+.,()\-]+\Z")
 
+# The opt-in ISO profile accepts the maintainer's unmodified DDM 0.5.0
+# password-login service and one precisely defined Fedora bridge. These are
+# complete stacks, not a search for a harmless include inside arbitrary PAM.
+DDM_SYSTEM_LOGIN_STACK = """auth sufficient pam_succeed_if.so user ingroup nopasswdlogin
+auth include system-login
+-auth optional pam_deepin_keyring.so
+-auth optional pam_gnome_keyring.so
+-auth optional pam_kwallet5.so
+account include system-login
+password include system-login
+-password optional pam_gnome_keyring.so use_authtok
+session optional pam_keyinit.so force revoke
+session include system-login
+session required pam_systemd.so
+-session optional pam_deepin_keyring.so
+-session optional pam_gnome_keyring.so auto_start
+-session optional pam_kwallet5.so auto_start
+"""
+FEDORA_SYSTEM_LOGIN_STACK = """auth substack password-auth
+auth include postlogin
+account required pam_nologin.so
+account include password-auth
+password include password-auth
+session required pam_selinux.so close
+session required pam_loginuid.so
+session required pam_selinux.so open
+session optional pam_keyinit.so force revoke
+session required pam_namespace.so
+session include password-auth
+session include postlogin
+"""
+
 
 def clean_live_autologin(contents: str, live_user: str) -> str:
     """Clear just a Live user's INI autologin stanza, preserving other settings."""
@@ -71,22 +103,34 @@ def target_path(root: Path, relative: str) -> Path:
     return path
 
 
-def verify_fedora_pam(root: Path) -> None:
-    """Require the Fedora DDM RPM's stack; authselect remains package-managed."""
+def _pam_rows(contents: str) -> list[list[str]]:
+    return [line.split() for original in contents.splitlines()
+            if (line := original.split("#", 1)[0].strip())]
+
+
+def verify_fedora_pam(root: Path, mode: str = "fedora") -> None:
+    """Validate packaged DDM/ISO PAM stacks without rewriting authselect."""
+    require(mode in {"fedora", "ddm-system-login"}, "Unsupported image PAM profile.")
     pam = target_path(root, "etc/pam.d/ddm")
     require(pam.is_file(), "The Fedora DDM package is missing its PAM configuration.")
-    lines = [line.split() for line in pam.read_text().splitlines()
-             if line.strip() and not line.lstrip().startswith("#")]
+    lines = _pam_rows(pam.read_text())
+    if mode == "ddm-system-login":
+        require(lines == _pam_rows(DDM_SYSTEM_LOGIN_STACK),
+                "This ISO profile requires the maintainer's unchanged DDM password-login PAM stack.")
+        bridge = target_path(root, "etc/pam.d/system-login")
+        require(bridge.is_file() and _pam_rows(bridge.read_text()) == _pam_rows(FEDORA_SYSTEM_LOGIN_STACK),
+                "The ISO must supply the approved Fedora system-login PAM bridge; password authentication cannot be bypassed.")
+        lines = _pam_rows(bridge.read_text())
     required = (("auth", "password-auth"), ("auth", "postlogin"),
                 ("account", "password-auth"), ("password", "password-auth"),
                 ("session", "password-auth"), ("session", "postlogin"))
     require(all(any(len(row) >= 3 and row[0].lstrip("-") == kind
                         and row[1] in {"include", "substack"} and row[2] == stack
                     for row in lines) for kind, stack in required),
-            "The Live image needs the Fedora DDM PAM package (ddm >= 0.5.0-6).")
+            "The Live image needs a Fedora-compatible DDM PAM configuration.")
     require(not any(token.startswith("common-") or token == "system-login"
                     for row in lines for token in row),
-            "DDM still references a non-Fedora PAM stack. Rebuild the DDM RPM for Fedora.")
+            "The DDM PAM stack does not match the selected Fedora image profile.")
     sessions = [row for row in lines if row[0].lstrip("-") == "session"]
     close = next((i for i, row in enumerate(sessions)
                   if len(row) >= 4 and row[2] == "pam_selinux.so" and "close" in row[3:]), -1)
@@ -99,6 +143,14 @@ def verify_fedora_pam(root: Path) -> None:
     for include in ("password-auth", "postlogin"):
         require(target_path(root, "etc/pam.d/" + include).is_file(),
                 "The payload's authselect PAM configuration is incomplete.")
+
+
+def verify_selinux_config(root: Path, mode: str) -> None:
+    require(mode in {"enforcing", "disabled"}, "Unsupported image SELinux profile.")
+    config = target_path(root, "etc/selinux/config")
+    require(config.is_file(), "The payload has no SELinux configuration.")
+    values = re.findall(r"(?m)^\s*SELINUX\s*=\s*([A-Za-z]+)\s*(?:#.*)?$", config.read_text())
+    require(values == [mode], f"The payload must explicitly configure SELINUX={mode} for its installation profile.")
 
 
 def verify_selinux_source(root: Path) -> None:

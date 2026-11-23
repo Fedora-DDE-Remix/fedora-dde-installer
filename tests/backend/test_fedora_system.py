@@ -11,6 +11,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/scripts"))
 import fedora_backend as backend
 import fedora_system as system
+from profile_fixtures import FEDORA_BRIDGE_PAM, ISO_PROFILE, MAINTAINER_DDM_PAM
 
 
 PAM = """#%PAM-1.0
@@ -45,6 +46,7 @@ class Recorder:
         self.target = target
         self.calls = []
         self.users = {"root": 0, "liveuser": 1000}
+        self.groups = ["wheel"]
         self.fail = None
 
     def run(self, argv, *, input_text=None, check=True, capture=True):
@@ -66,6 +68,8 @@ class Recorder:
             (self.target / "home" / command[-1]).mkdir(parents=True, exist_ok=True)
         elif command[:2] == ["locale", "-a"]:
             output = "C\nC.utf8\nen_US.utf8\nfr_FR.utf8\n"
+        elif command[:3] == ["id", "--name", "--groups"]:
+            output = " ".join([command[-1], *self.groups]) + "\n"
         elif command[:2] == ["rpm", "--query"]:
             code = 1
         elif command[0] == "findmnt":
@@ -252,6 +256,71 @@ class SystemTests(unittest.TestCase):
                          self.target / "etc/authselect/password-auth")
         self.assertEqual(self.runner.calls, [])
 
+    def test_opt_in_pam_bridge_preserves_both_package_owned_files(self):
+        ddm = self.put("etc/pam.d/ddm", MAINTAINER_DDM_PAM)
+        bridge = self.put("etc/pam.d/system-login", FEDORA_BRIDGE_PAM)
+        with self.assertRaises(backend.InstallError):
+            system.verify_fedora_pam(self.target)
+        self.backend.state["install_profile"] = dict(ISO_PROFILE)
+        self.backend.configure_fedora_pam()
+        self.assertEqual(ddm.read_text(), MAINTAINER_DDM_PAM)
+        self.assertEqual(bridge.read_text(), FEDORA_BRIDGE_PAM)
+        self.assertEqual(self.runner.calls, [])
+
+    def test_bridge_rejects_missing_includes_and_authentication_bypasses(self):
+        self.put("etc/pam.d/ddm", MAINTAINER_DDM_PAM)
+        self.put("etc/pam.d/system-login", FEDORA_BRIDGE_PAM)
+        for row in FEDORA_BRIDGE_PAM.splitlines():
+            if not row or row.startswith("#"):
+                continue
+            with self.subTest(missing=row), self.assertRaises(backend.InstallError):
+                self.put("etc/pam.d/system-login", FEDORA_BRIDGE_PAM.replace(row + "\n", ""))
+                system.verify_fedora_pam(self.target, "ddm-system-login")
+        for unsafe in (FEDORA_BRIDGE_PAM.replace("auth substack", "auth optional", 1),
+                       "auth sufficient pam_permit.so\n" + FEDORA_BRIDGE_PAM):
+            with self.subTest(unsafe=unsafe.splitlines()[0]), self.assertRaises(backend.InstallError):
+                self.put("etc/pam.d/system-login", unsafe)
+                system.verify_fedora_pam(self.target, "ddm-system-login")
+        self.put("etc/pam.d/system-login", FEDORA_BRIDGE_PAM)
+        self.put("etc/pam.d/ddm", "auth sufficient pam_permit.so\n" + MAINTAINER_DDM_PAM)
+        with self.assertRaises(backend.InstallError):
+            system.verify_fedora_pam(self.target, "ddm-system-login")
+        self.put("etc/pam.d/ddm", MAINTAINER_DDM_PAM)
+        (self.target / "etc/authselect/password-auth").unlink()
+        with self.assertRaises(backend.InstallError):
+            system.verify_fedora_pam(self.target, "ddm-system-login")
+
+    def test_disabled_account_still_requires_password_and_skips_relabel(self):
+        self.backend.state["install_profile"] = dict(ISO_PROFILE)
+        self.backend.save()
+        self.put("etc/selinux/config", "SELINUX=disabled\n")
+        self.backend.configure()
+        self.assertEqual(self.backend.state["phase"], "user-configured")
+        self.assertIn(["id", "--name", "--groups", "alice"], self.commands())
+        self.assertIn(["chpasswd"], self.commands())
+        self.assertFalse(any(command[0] == "restorecon" for command in self.commands()))
+
+    def test_legacy_profile_refuses_passwordless_group_before_password_or_boot_work(self):
+        self.backend.state["install_profile"] = dict(ISO_PROFILE)
+        self.backend.save()
+        self.runner.groups.append("nopasswdlogin")
+        with self.assertRaisesRegex(backend.InstallError, "passwordless-login"):
+            self.backend.configure()
+        self.assertNotIn(["chpasswd"], self.commands())
+        self.kernels.assert_not_called()
+
+    def test_enforcing_relabel_remains_enabled_and_disabled_config_must_match(self):
+        self.backend.relabel()
+        self.assertTrue(any(command[0] == "restorecon" for command in self.commands()))
+        self.backend.state["install_profile"] = dict(ISO_PROFILE)
+        self.runner.calls.clear()
+        with self.assertRaisesRegex(backend.InstallError, "SELINUX=disabled"):
+            self.backend.relabel()
+        self.assertEqual(self.runner.calls, [])
+        self.put("etc/selinux/config", "SELINUX=disabled\nSELINUX=enforcing\n")
+        with self.assertRaises(backend.InstallError):
+            self.backend.relabel()
+
     def test_selinux_source_accepts_enforcing_and_permissive_labelled_payloads(self):
         labels = {"usr/bin/bash": b"system_u:object_r:shell_exec_t:s0\0",
                   "usr/lib/systemd/systemd": b"system_u:object_r:init_exec_t:s0\0",
@@ -290,6 +359,7 @@ class SystemTests(unittest.TestCase):
         sudoers = self.put("etc/sudoers.d/custom", "liveuser ALL=(ALL) NOPASSWD: ALL\n%builders ALL=(ALL) /usr/bin/true\n")
         self.put("etc/machine-info", 'PRETTY_HOSTNAME="Live Media"\n')
         self.backend.clean_live_settings()
+        self.assertIn(["systemctl", "--root", str(self.target), "disable", "fedora-dde-live.service"], self.commands())
         self.assertEqual(json.loads(schema.read_text()), defaults)
         contents = json.loads(override.read_text())["contents"]
         self.assertEqual(contents["autologinUser"]["value"], "")

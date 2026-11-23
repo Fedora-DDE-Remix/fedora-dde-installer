@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/scripts"))
 import fedora_backend as backend
 import fedora_payload as payload
 import fedora_system as system
+from profile_fixtures import FEDORA_BRIDGE_PAM, ISO_PROFILE, MAINTAINER_DDM_PAM, image_owner
 
 
 class Config:
@@ -51,7 +52,7 @@ class PayloadTests(unittest.TestCase):
         # Kernel SELinux state and xattr policy have dedicated system tests.
         # The temporary fixture is an ordinary unprivileged test directory.
         selinux = patch.object(system, "verify_selinux_source")
-        selinux.start()
+        self.selinux_check = selinux.start()
         self.addCleanup(selinux.stop)
         self.config, self.runner = Config(), PayloadRunner()
         self.backend = backend.Backend(self.config, self.runner, self.root / "target", self.root / "state", "test-boot")
@@ -187,6 +188,67 @@ class PayloadTests(unittest.TestCase):
             self.backend.copy()
         self.assertEqual(sum(call[0] == "rsync" for call in self.runner.calls), copies)
         self.assertTrue(self.backend.state["source_released"])
+
+    def iso_profile(self):
+        self.write("etc/fedora-dde-installer/install-profile.json", json.dumps(ISO_PROFILE)).chmod(0o644)
+        self.write("etc/selinux/config", "SELINUX=disabled\nSELINUXTYPE=targeted\n")
+        self.write("etc/pam.d/ddm", MAINTAINER_DDM_PAM)
+        self.write("etc/pam.d/system-login", FEDORA_BRIDGE_PAM)
+        self.write("usr/bin/id", "executable fixture")
+
+    def test_disabled_requires_explicit_source_profile_not_runtime_settings(self):
+        self.config.values["DI_SELINUX_MODE"] = "disabled"
+        self.write("etc/selinux/config", "SELINUX=disabled\n")
+        with self.assertRaises(backend.InstallError):
+            payload.validate_root(self.backend, self.source)
+        self.selinux_check.assert_called_once_with(self.source)
+        self.iso_profile()
+        self.selinux_check.reset_mock()
+        (self.source / "usr/bin/restorecon").unlink()
+        with image_owner():
+            payload.validate_root(self.backend, self.source)
+        self.selinux_check.assert_not_called()
+        (self.source / "usr/bin/id").unlink()
+        with image_owner(), self.assertRaisesRegex(backend.InstallError, "missing id"):
+            payload.validate_root(self.backend, self.source)
+
+    def test_source_profile_is_persisted_and_change_aborts_before_copy(self):
+        self.iso_profile()
+        self.config.values["DI_SOURCE_ROOT"] = str(self.source)
+        with image_owner():
+            selected = payload.prepare_source(self.backend)
+            self.assertEqual(selected["install_profile"], ISO_PROFILE)
+            self.backend.state.update(selected)
+            (self.source / "etc/fedora-dde-installer/install-profile.json").unlink()
+            with self.assertRaisesRegex(backend.InstallError, "profile changed"):
+                payload.copy_payload(self.backend)
+        self.assertFalse(any(call[0] == "rsync" for call in self.runner.calls))
+
+    def test_disabled_copy_keeps_acl_and_capability_support(self):
+        self.iso_profile()
+        self.backend.state["install_profile"] = dict(ISO_PROFILE)
+        with image_owner():
+            payload.copy_payload(self.backend)
+        call = next(call for call in self.runner.calls if call[0] == "rsync")
+        self.assertIn("-aHAX", call)
+        self.assertIn("--filter=-x system.*", call)
+        self.assertIn("--filter=-x security.selinux", call)
+        self.assertNotIn("--filter=-x security.*", call)
+
+    def test_copy_restores_only_the_validated_profile_without_runtime_secrets(self):
+        self.iso_profile()
+        self.write("etc/fedora-dde-installer/installer.conf", "DI_PASSWORD=must-not-be-copied\n")
+        self.backend.state["install_profile"] = dict(ISO_PROFILE)
+        with image_owner():
+            payload.copy_payload(self.backend)
+        call = next(call for call in self.runner.calls if call[0] == "rsync")
+        self.assertIn("--exclude=/etc/fedora-dde-installer/***", call)
+        directory = self.backend.target / "etc/fedora-dde-installer"
+        self.assertEqual(sorted(path.name for path in directory.iterdir()), ["install-profile.json"])
+        profile = directory / "install-profile.json"
+        self.assertEqual(json.loads(profile.read_text()), ISO_PROFILE)
+        self.assertEqual(profile.stat().st_mode & 0o777, 0o644)
+        self.assertNotIn("must-not-be-copied", profile.read_text())
 
 
 if __name__ == "__main__":

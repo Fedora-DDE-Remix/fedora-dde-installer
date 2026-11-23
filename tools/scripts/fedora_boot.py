@@ -92,6 +92,8 @@ def _uuid(mapping: dict) -> str:
 
 def kernel_arguments(backend) -> list[str]:
     """Rebuild storage arguments; only explicit hardware options survive Live."""
+    from fedora_profile import selinux_disabled
+
     if "live_kernel_cmdline" not in backend.state:
         backend.state["live_kernel_cmdline"] = Path("/proc/cmdline").read_text().strip()
         backend.save()
@@ -144,8 +146,10 @@ def kernel_arguments(backend) -> list[str]:
                 arguments.append(argument)
             if key == "console" and not re.fullmatch(r"tty[0-9]+(?:,.*)?", value):
                 serial_console = True
-    # This installer explicitly configures enforcing SELinux. A Live-only
-    # selinux=0/enforcing=0 must not silently override the installed policy.
+    # Only the explicit, validated image profile can disable target SELinux.
+    # Live-only selinux/enforcing arguments never select installation policy.
+    if selinux_disabled(backend.state):
+        arguments.append("selinux=0")
     if blacklist:
         arguments.append("modprobe.blacklist=" + ",".join(blacklist))
     backend.write("etc/modprobe.d/anaconda-denylist.conf", "".join(f"blacklist {module}\n" for module in blacklist))
@@ -226,6 +230,11 @@ def _verify_bls(backend, relative: str, expected_arguments: list[str]) -> None:
 
 
 def install_kernels(backend) -> None:
+    from fedora_profile import selinux_disabled
+    from fedora_system import verify_selinux_config
+
+    if selinux_disabled(backend.state):
+        verify_selinux_config(backend.target, "disabled")
     arguments = kernel_arguments(backend)
     options = " ".join(arguments)
     # Write the defaults before cmdline: Fedora's 20-grub.install compares their mtimes.
