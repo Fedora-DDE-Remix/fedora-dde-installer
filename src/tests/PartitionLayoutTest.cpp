@@ -147,6 +147,29 @@ int main(int argc, char **argv)
         }
     }
 
+    // A marketed 16 GB disk is 16,000,000,000 bytes, not qemu-img's 16G
+    // (16 GiB). Its default layout must reach the payload-aware preflight.
+    for (bool uefi : {true, false}) {
+        CommonFunc::setSettingsValue("DI_BOOTLOADER_IS_EFI", uefi);
+        for (qint64 sectors : {512, 4096}) {
+            auto disk = testDevice(sectors);
+            disk.byteSize = 16000000000LL;
+            disk.size = disk.byteSize / (1024 * 1024);
+            operations->setDeviceInfo({{disk, {freeSpace(disk)}}});
+            require(fullDisk->addSystemDisk(disk, error), "16 GB automatic planning failed: " + error);
+            require(senior->checkPartition(error), "16 GB plan must reach payload validation: " + error);
+            const auto smallPlan = operations->getCurrentDeviceInfo();
+            for (const auto &partition : smallPlan.first()) {
+                if (partition.usage == ESpaceUsage::USE) {
+                    require(partition.endPoint * sectors < disk.byteSize, "16 GB plan exceeds the physical device");
+                    if (partition.mountPoint == "/")
+                        require(partition.size >= 12288 && partition.size < 16 * 1024,
+                                "16 GB root keeps the lower floor without inventing capacity");
+                }
+            }
+        }
+    }
+
     // Existing MBR installations remain valid; existing GPT needs bios_grub.
     auto withoutBios = biosLayout;
     withoutBios.removeFirst();
@@ -215,7 +238,7 @@ int main(int argc, char **argv)
     // precisely the bytes it will allocate to boot partitions.
     operations->setDeviceInfo({{biosDisk, {freeSpace(biosDisk)}}});
     auto *custom = PartitionCustomManager::instance();
-    require(custom->getSystemMinSpace(biosDisk) == 32768 + 2048 + 1,
+    require(custom->getSystemMinSpace(biosDisk) == 12288 + 2048 + 1,
             "Free-space sizing must reserve BIOS and /boot without physical swap");
     const auto free = freeSpace(biosDisk);
     custom->newPartition(biosDisk, free, free.size, 0);

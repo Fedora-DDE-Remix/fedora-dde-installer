@@ -66,12 +66,21 @@
 调试配置 `DI_SOURCE_ROOT` 默认为 `auto`。显式指定的路径也必须是独立只读挂载，
 安装器不会卸载用户自己提供的源。自动挂载的源只在核验身份后释放。
 
-0.2.1 为本次 Fedora 45 x86_64 测试 ISO 增加了明确例外：只读 payload 中的
+0.2.1 曾为 2026-11-23 的 Fedora 45 x86_64 测试 ISO 增加明确例外：只读 payload 中的
 root-owned `install-profile.json` 选择禁用 SELinux，并通过 ISO 自有 `system-login`
 桥接使用维护者 DDM 5 的普通密码登录。默认 profile 不变，DDM 原 PAM 文件不改，
 Live 使用 `liveuser` / `liveuser` 手动登录，不启用 DDM 5 自动登录。
 这项明确选择不再声称与 Fedora 默认 enforcing 策略相同；配置契约、复制和引导行为见
 [BUILDING.md](BUILDING.md#explicit-test-iso-profile)。
+
+当前 0.2.2 ISO 配方已恢复默认 `enforcing / fedora` profile，使用维护者更新的
+DDM 原生 Fedora PAM 和 SELinux 策略包。compose 检查策略注册及最终只读 payload
+标签；运行验证要求 Live 和安装后的系统都保持 Enforcing。
+
+0.2.2 同时将原来的高固定容量门槛改为较小的 UI 基础门槛和实际 payload 空间检查。
+整盘初筛为 14 GiB，默认根分区最低 12 GiB；分区操作前按挂载点计算未压缩数据与
+余量，复制前再次核对实际可用容量。具体镜像能否安装到十进制 16 GB 磁盘，必须
+由该镜像的实际虚拟机安装证明，不能从静态阈值推断。
 
 ## 仍然存在的差异
 

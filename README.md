@@ -36,13 +36,19 @@
 | `/boot` | **必须有独立的 ext4 分区，且新建或显式选择格式化**；默认大小 2 GiB |
 | UEFI | `/boot/efi` 使用 FAT32 EFI 系统分区，可复用现有 ESP；使用 Fedora 软件包中的 shim/GRUB 文件 |
 | BIOS | 仅 x86_64、单磁盘；新建 GPT + 1 MiB `bios_grub`，也可安装到现有 MBR 布局 |
-| 最小安装容量 | 默认安装磁盘容量门槛为 50 GB |
+| 最小安装容量 | 默认整盘初筛 14 GiB、根分区 12 GiB；还按本次 payload 的实际占用和各分区余量检查，小盘是否可安装以实际测量为准 |
 | 当前不支持 | 加密安装、LVM 安装、镜像克隆、不可变系统部署、首次开机再创建账户 |
 
 手工分区时，根分区和 `/boot` 都必须新建或明确选择格式化。其他分区能否保留，
 以界面显示的操作计划为准。此版本要求独立 `/boot`，不接受把它放在根文件系统内。
 新建普通文件系统分区也必须明确标记格式化，不能依赖新分区范围内遗留的旧签名。
 手动指定独立 `/home` 时保留该选择，不在 Btrfs 根内另建 `home` 子卷。
+
+0.2.2 下调了原来的 50 GiB 整盘与 32 GiB 根分区门槛。安装器会在分区操作前
+统计只读 payload 的未压缩占用，按目标挂载点分配空间要求；根分区至少保留
+2 GiB 余量，`/boot` 为生成内核及救援镜像保留额外空间。挂载目标后、复制前还会
+核对实际可用空间，不依赖 Btrfs 压缩率来保证能够安装。16 GB（十进制）是本次
+ISO 虚拟机验证的目标容量，并不是对所有未来镜像大小的固定承诺。
 
 ## 与 Fedora 官方安装结果对齐
 
@@ -58,7 +64,10 @@ Wi-Fi/VPN，不执行 Anaconda/Kickstart 的任意安装后脚本。差异、ISO
 
 ## 开发状态与验证边界
 
-当前为开发版。2026-11-23（北京时间）的 [GitHub Actions 构建](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45055520645)
+当前源码版本为 0.2.2。发布验证由 [ISO-Build 的构建与安装测试](https://github.com/Fedora-DDE-Remix/ISO-Build/actions)
+记录；更新版本号或通过单元测试不等于镜像已经通过实际安装。
+
+2026-11-23（北京时间）的 [GitHub Actions 构建](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45055520645)
 已完成 **0.2.0 的完整 Qt 6 / DTK 6 GUI 编译、Fedora 45 x86_64 RPM/SRPM 打包**。
 验证提交为 `320197121fb194a327e7fcd60f5c552c901add4d`，直接使用正式 COPR
 开发包，未启用临时 SDK 补建。三项 CTest 均实际执行并通过：C++ 工作流、
@@ -66,13 +75,17 @@ Wi-Fi/VPN，不执行 Anaconda/Kickstart 的任意安装后脚本。差异、ISO
 [安装器构建产物](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45055520645/artifacts/14767373498)
 包含主 RPM、SRPM、debuginfo 和 debugsource。
 
-0.2.1 新增供本次 Fedora 45 x86_64 测试 ISO 使用的显式配置：保留维护者的
+0.2.1 曾为 2026-11-23 的 Fedora 45 x86_64 测试 ISO 增加显式配置：保留维护者的
 DDM `0.5.0-5`，由 ISO 自己的配置 RPM 提供 Fedora PAM 桥接，并明确禁用 SELinux。
-本版不依赖此前的 DDM 6 配方，也不修改或重建维护者的桌面仓库。
-上面的 GUI/RPM 构建记录属于 0.2.0，不能当作 0.2.1 或新 ISO 的运行验证。
+该旧配置保留兼容。本次 0.2.2 镜像恢复默认的 `enforcing / fedora` profile，使用
+维护者已发布的 DDM `0.5.0-8` 原生 Fedora PAM 和 SELinux 策略包，移除 ISO PAM 桥。
+本仓库不修改或重建维护者的桌面仓库。上面的 GUI/RPM 构建记录属于 0.2.0，
+不能当作新版本或新 ISO 的运行验证。
 
-**Live ISO 虚拟机安装、移除 ISO 后首次启动及 aarch64 构建尚未完成验证。**
-已通过的工作流及后端测试不会操作真实磁盘。
+当前发布门禁包含 UEFI/Btrfs、BIOS/GPT/ext4、BIOS/MBR/ext4、XFS+独立 home+swap、
+保留分区及十进制 16 GB 小盘六种实际安装，再移除 ISO 启动并验证 Enforcing 和
+DDM 桌面登录。各项是否通过以对应 Actions 报告为准；aarch64 与 Secure Boot
+需要独立验证。下方的本地工作流及后端测试只使用模拟命令，不操作真实磁盘。
 
 CI 默认直接使用 COPR 发布的开发包。手动触发工作流时，可显式选择
 `bootstrap_widget`，在临时容器内用固定配方补建 Widget SDK；此选项默认关闭。

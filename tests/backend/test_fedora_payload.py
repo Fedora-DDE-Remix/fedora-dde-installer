@@ -12,6 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools/scripts"))
 import fedora_backend as backend
 import fedora_payload as payload
+import fedora_space as space
 import fedora_system as system
 from profile_fixtures import FEDORA_BRIDGE_PAM, ISO_PROFILE, MAINTAINER_DDM_PAM, image_owner
 
@@ -179,7 +180,7 @@ class PayloadTests(unittest.TestCase):
         self.backend.state["source_mount_owned"] = True
         self.backend.save("partitioned")
         self.runner.fail_unmount = True
-        with patch.object(self.backend, "verify_target"):
+        with patch.object(self.backend, "verify_target"), patch.object(space, "before_copy") as check_space:
             with self.assertRaises(backend.InstallError):
                 self.backend.copy()
             self.assertEqual(self.backend.state["phase"], "copied")
@@ -187,6 +188,7 @@ class PayloadTests(unittest.TestCase):
             self.runner.fail_unmount = False
             self.backend.copy()
         self.assertEqual(sum(call[0] == "rsync" for call in self.runner.calls), copies)
+        check_space.assert_called_once_with(self.backend)
         self.assertTrue(self.backend.state["source_released"])
 
     def iso_profile(self):

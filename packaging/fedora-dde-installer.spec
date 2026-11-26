@@ -1,5 +1,5 @@
 Name:           fedora-dde-installer
-Version:        0.2.1
+Version:        0.2.2
 Release:        0.1%{?dist}
 Summary:        Fedora DDE Remix graphical Live installer
 License:        GPL-3.0-or-later
@@ -122,6 +122,10 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_unitdir}/%{name}.service
 
 %changelog
+* Thu Nov 26 2026 Fedora DDE Remix contributors - 0.2.2-0.1
+- Replace conservative disk limits with payload-aware checks and a 12 GiB root floor.
+- Check retained filesystems before partitioning and actual free space before copying.
+
 * Mon Nov 23 2026 Fedora DDE Remix contributors - 0.2.1-0.1
 - Support an explicit read-only image profile for the SELinux-disabled test ISO.
 - Validate the maintainer's DDM 5 password-login stack with an ISO-owned Fedora bridge.

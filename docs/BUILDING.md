@@ -89,7 +89,9 @@ rpmbuild --define "_topdir $PWD/rpmbuild" \
 
 Uncommitted edits are not included in `git archive`. To publish a release, update
 the SPEC to use an immutable release tag and record the source commit. The
-current `0.2.1-0.1` package is a development build, not a release qualification.
+current 0.2.2 package version alone is not a release qualification. The ISO
+recipe pins an immutable installer commit and records its RPM hashes; release
+qualification additionally requires the real installation jobs to pass.
 
 ## Installed layout
 
@@ -139,10 +141,12 @@ contains `fedora-dde-installer-0.2.0-0.1.fc45.x86_64.rpm`, its SRPM, debuginfo a
 debugsource. The archive SHA-256 is
 `41163a0c10d26d678ae8b23ebce63199699e4e561a5bb9826665437b5aaa0a2d`.
 
-Version 0.2.1 adds the explicit test-image profile described below. It uses the
+Version 0.2.1 added the legacy test-image profile described below. It used the
 maintainer's DDM 0.5.0-5 with an ISO-owned PAM bridge; the earlier DDM 6 recipe
 is not an input to this image. Do not modify or rebuild the separately maintained
-desktop repository. The 0.2.0 build above does not validate 0.2.1 or the new ISO.
+desktop repository. The 0.2.0 build above does not validate newer installers or ISOs.
+The 0.2.2 image uses the normal enforcing/Fedora profile with the maintainer's
+updated DDM 0.5.0-8 and SELinux packages; it does not install the old PAM bridge.
 
 These Actions workflows do not submit COPR builds or publish repository
 metadata. `dnf builddep` checks build dependencies; image integration must also
@@ -152,13 +156,39 @@ payload; compose the required packages and profile into the image itself.
 See [FEDORA_ALIGNMENT.md](FEDORA_ALIGNMENT.md) for the default payload
 prerequisites and remaining Anaconda comparison items.
 
-Live-image installation, DDM login, target-system boot, Secure Boot and aarch64
-have not yet been validated by these jobs.
+The package jobs above do not themselves validate Live-image installation,
+DDM login or target-system boot. The ISO-Build workflow runs actual disposable
+VM installations for UEFI/Btrfs, BIOS/GPT/ext4, BIOS/MBR/ext4, XFS with separate
+home and swap, retained partitions, and a decimal 16 GB disk. Inspect each
+completed report for its result. Secure Boot and aarch64 require separate tests.
+
+## Capacity checks in 0.2.2
+
+The default UI thresholds are 14 GiB for initial disk filtering and 12 GiB for
+the root partition, replacing the earlier 50 GiB disk and 32 GiB root limits.
+These thresholds do not guarantee that a particular image fits. Before
+partitioning, the backend measures the uncompressed read-only payload for the
+chosen mount layout and reserves working space. It checks actual available
+space again after mounting and before copying. Btrfs compression is not counted
+as required free space, and preserved filesystems are not assumed empty.
+
+## Fedora Enforcing release profile
+
+The current release ISO places this explicit profile in its read-only payload:
+
+```json
+{"schema":1,"selinux":"enforcing","pam":"fedora"}
+```
+
+The ISO build verifies the maintainer's native Fedora DDM PAM stack, installed
+SELinux modules and actual filesystem labels. VM jobs require Enforcing during
+Live boot and after disk-only boot and authenticate through the real DDM.
 
 ## Explicit test ISO profile
 
-The Fedora 45 x86_64 test ISO explicitly disables SELinux and retains the
-maintainer's DDM 0.5.0-5. Its configuration RPM installs this file in the original
+The earlier 2026-11-23 Fedora 45 x86_64 test ISO explicitly disabled SELinux and
+retained the maintainer's DDM 0.5.0-5. This legacy exception is not used by the
+current release recipe. Its configuration RPM installed this file in the original
 read-only payload, not only in the running Live overlay:
 
 `/etc/fedora-dde-installer/install-profile.json`

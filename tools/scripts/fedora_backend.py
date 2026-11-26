@@ -307,6 +307,7 @@ class Backend:
         validate_root(self, source)
 
     def preflight(self) -> None:
+        from fedora_space import prepare as prepare_space
         from fedora_boot import firmware_suffix
         from fedora_payload import prepare_source, release_source, rooted_path
         from fedora_profile import selinux_disabled
@@ -347,6 +348,7 @@ class Backend:
         source_state = prepare_source(self)
         source = Path(source_state["source"])
         try:
+            space_requirements = prepare_space(self, source, plan)
             require(rooted_path(source, "usr/lib/systemd/system/ddm.service").is_file(), "The Live image must include DDM.")
             if not selinux_disabled(source_state):
                 require(rooted_path(source, "etc/selinux/targeted/contexts/files/file_contexts").is_file(),
@@ -375,6 +377,7 @@ class Backend:
         self.state = {"boot_id": self.boot_id, "target": str(self.target), **source_state,
                       "architecture": architecture, "uefi": uefi, "efi_suffix": suffix, "devices": devices,
                       "partition_tables": tables, "live_kernel_cmdline": commandline,
+                      "space_requirements": space_requirements,
                       "plan_path": str(plan_path), "plan_sha256": hashlib.sha256(plan_bytes).hexdigest(),
                       "installation_id": str(uuid.uuid4()), "owned_mounts": [], "mounts": []}
         self.save("preflight")
@@ -383,12 +386,14 @@ class Backend:
 
     def partition(self) -> None:
         from fedora_payload import verify_source
+        from fedora_space import validate_capacity
         from fedora_storage import mount_filesystems, verify_bios_area
         self.load("preflight")
         plan_bytes = Path(self.state["plan_path"]).read_bytes()
         require(hashlib.sha256(plan_bytes).hexdigest() == self.state["plan_sha256"],
                 "The partition plan changed after validation. Review it again.")
         verify_source(self)  # Check again before the first destructive operation.
+        validate_capacity(json.loads(plan_bytes), self.state.get("space_requirements", {}))
         # Mark before the destructive helper: retries must never silently format again.
         self.save("partitioning")
         self.config.set("DI_MOUNTS_POINTS", "")
@@ -419,9 +424,11 @@ class Backend:
 
     def copy(self) -> None:
         from fedora_payload import copy_payload, release_source
+        from fedora_space import before_copy
         self.load("partitioned", "copying", "copied")
         self.verify_target(marker=self.state["phase"] == "copied")
         if self.state["phase"] != "copied":
+            before_copy(self)
             self.save("copying")
             copy_payload(self)
             self.write("etc/fedora-dde-installer-target", self.state["installation_id"] + "\n", 0o600)

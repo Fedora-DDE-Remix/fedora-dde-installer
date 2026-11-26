@@ -320,11 +320,14 @@ class WorkflowTests(unittest.TestCase):
         self.assertFalse(any(call[0][0] in {"swapon", "swapoff"} for call in self.runner.calls))
 
     def test_copy_excludes_live_mounts_machine_identity_and_credentials(self):
+        import fedora_space as space
         source = self.root / "source"
         source.mkdir()
         self.backend.state["source"] = str(source)
+        self.backend.state["space_requirements"] = space.measure(source, {"/"}, "liveuser")
         self.backend.save("partitioned")
-        with mock.patch.object(payload, "verify_source"):
+        with mock.patch.object(payload, "verify_source"), mock.patch.object(space.os, "statvfs", return_value=
+                mock.Mock(f_bavail=4096, f_frsize=1024 ** 2, f_fsid=1)):
             self.backend.copy()
         rsync = next(call[0] for call in self.runner.calls if call[0][0] == "rsync")
         for item in ("/dev/***", "/proc/***", "/sys/***", "/run/***", "/tmp/***", "/target/***",
