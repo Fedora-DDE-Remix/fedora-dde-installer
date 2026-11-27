@@ -6,6 +6,7 @@
 #include "SeniorLVMFrame.h"
 #include <DSuggestButton>
 #include <DLabel>
+#include <DCheckBox>
 #include <QStackedWidget>
 
 class FramePluginInterface;
@@ -56,6 +57,8 @@ private:
     SeniorPartationListView *m_tableView = Q_NULLPTR;
     ItemModel *m_model = Q_NULLPTR;
     SeniorLVMFrame *m_lvmFrame = Q_NULLPTR;
+    DCheckBox *m_encryptRoot = Q_NULLPTR;
+    DLabel *m_encryptionTip = Q_NULLPTR;
 
 };
 

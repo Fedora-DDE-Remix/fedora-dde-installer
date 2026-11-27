@@ -85,7 +85,9 @@ DDM 原生 Fedora PAM 和 SELinux 策略包。compose 检查策略注册及最�
 ## 仍然存在的差异
 
 1. **安装引擎**：当前仍为自己的阶段调度与 libparted helper，不是完整 Anaconda/
-   Blivet。未支持 LUKS、LVM、软件 RAID、复杂多磁盘策略和 FIPS 安装。
+   Blivet。0.3.0 新增单容器 LUKS2 根分区安装，支持 Btrfs/ext4/XFS，个人数据
+   留在加密根内；尚未支持已有 LUKS 复用、独立加密 home/swap、LVM、软件 RAID、
+   复杂多磁盘策略和 FIPS 安装。ESP 与独立 `/boot` 保持明文。
 2. **网络**：目标继承原始 payload 的网络默认值；尚未迁移 Live 会话后来建立的
    Wi-Fi、VPN 或带证书连接。未来需对明确选定的 NetworkManager profile 做有权限
    控制的迁移，不能通过复制整个运行中 `/etc` 实现。
@@ -97,6 +99,22 @@ DDM 原生 Fedora PAM 和 SELinux 策略包。compose 检查策略注册及最�
    固件 NVRAM 行为还需要分别验证。复制发行版签名文件不等于已经通过 Secure Boot 验收。
 6. **安装产生的额外信息**：本项目自己的安装标记和日志、DDE 会话与品牌文件属于
    预期差异；磁盘 UUID、machine-id、随机种子、时间戳和密码哈希盐也不会逐字相同。
+
+## 安装挂载的生命周期
+
+[45.20261127.3 的实际诊断](https://github.com/Fedora-DDE-Remix/ISO-Build/actions/runs/45996299589)
+发现目标 Btrfs 和 runtime bind 挂载传播进多个系统服务的独立命名空间；安装器本地
+卸载后，这些副本仍持有文件系统，导致 LUKS close 返回 busy。采样明确保存了至少
+15 个命名空间的残留，达到输出上限后标为不完整，没有将缺失记录当作不存在。
+
+`0.3.0-0.3` 在启动长期 GUI 前创建私有 mount namespace，所有 hook 继承同一环境，
+并由后端核对内核命名空间身份。隔离在安装源和首次目标挂载之前完成，覆盖已有服务
+与之后新建服务两种情况。安装器不会更改 Live 宿主的全局传播属性，也不会进入服务
+命名空间卸载或终止服务。普通卸载、关闭自己创建的 mapper 和同次 Live 账户配置
+仍保留；旧会话退出后的未完成状态不会被新会话接管。
+
+这项修复需要独立的真实内核挂载回归、Fedora RPM 构建与新 ISO 验证。上一 `.3` 的
+失败记录保留，不能因源码修复而改述为该镜像已经通过安装后启动。
 
 ## 验证与发布门槛
 

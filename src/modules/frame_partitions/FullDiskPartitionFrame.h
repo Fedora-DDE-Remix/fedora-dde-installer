@@ -89,7 +89,6 @@ private:
 
     SizeEditDialog *m_sizeEditDialog = Q_NULLPTR;
     SDeviceInfo m_dev;
-    QString m_fullEncryptionPwd = Q_NULLPTR;
     bool m_autoDecrypt = false;
 
     QWidget *m_contentWidget = Q_NULLPTR;

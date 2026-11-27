@@ -96,8 +96,8 @@ class ValidationTests(unittest.TestCase):
         ]
         self.assertEqual(backend.validate_plan(plan), ["/dev/disk"])
 
-    def test_root_reuse_and_encryption_fail_before_partitioning(self):
-        for extra in ({"operate": "edit", "isneedformat": False}, {"isneedformat": False}, {"isCrypt": True},
+    def test_root_reuse_and_unsupported_storage_fail_before_partitioning(self):
+        for extra in ({"operate": "edit", "isneedformat": False}, {"isneedformat": False}, {"isCryptHeader": True},
                       {"filesystem": "crypto_luks"}, {"mountPoint": "/persistent"},
                       {"label": "safe;touch/tmp/bad"}, {"path": "/dev/a;bad"}):
             item = {"type": "partition", "operate": "new", "isneedformat": True, "device": "/dev/disk",
@@ -273,7 +273,7 @@ class WorkflowTests(unittest.TestCase):
         self.runner.fail_command = "umount"
         with mock.patch.object(backend.os.path, "ismount", return_value=True), self.assertRaises(backend.InstallError):
             self.backend.finalize()
-        self.assertEqual(self.backend.state["phase"], "user-configured")
+        self.assertEqual(self.backend.state["phase"], "finalizing")
         self.assertEqual(self.config.get("DI_PASSWORD"), "")
         self.runner.fail_command = None
         self.backend.configure()
@@ -363,6 +363,27 @@ class WorkflowTests(unittest.TestCase):
 
 
 class RunnerTests(unittest.TestCase):
+    def test_secret_process_disables_rlimit_and_piped_core_handlers(self):
+        libc = mock.Mock()
+        libc.prctl.return_value = 0
+        with mock.patch.object(backend.resource, "setrlimit") as limit, mock.patch.object(backend.ctypes, "CDLL", return_value=libc):
+            backend.protect_process_secrets()
+        limit.assert_called_once_with(backend.resource.RLIMIT_CORE, (0, 0))
+        libc.prctl.assert_called_once_with(4, 0, 0, 0, 0)
+        libc.prctl.return_value = -1
+        with mock.patch.object(backend.resource, "setrlimit"), mock.patch.object(backend.ctypes, "CDLL", return_value=libc):
+            with self.assertRaisesRegex(backend.InstallError, "process dumps"):
+                backend.protect_process_secrets()
+
+    def test_private_encryption_descriptor_environment_is_not_forwarded(self):
+        result = subprocess.CompletedProcess(["cryptsetup"], 0, "", "")
+        with mock.patch.dict(backend.os.environ, {"FEDORA_DDE_CRYPT_FD": "71"}), \
+                mock.patch.object(backend.subprocess, "run", return_value=result) as run:
+            backend.Runner().run(["cryptsetup", "open", "--key-file", "-", "/dev/test", "luks-test"],
+                                 input_text="test-secret")
+        self.assertNotIn("FEDORA_DDE_CRYPT_FD", run.call_args.kwargs["env"])
+        self.assertEqual(run.call_args.kwargs["input"], "test-secret")
+
     def test_password_input_is_not_relayed_on_command_failure(self):
         result = subprocess.CompletedProcess(["chpasswd"], 1, "", "potential sensitive diagnostic")
         with mock.patch.object(backend.subprocess, "run", return_value=result) as run:

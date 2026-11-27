@@ -9,6 +9,7 @@ public:
     static PartitionTaskManager *instance();
 
 public:
+    bool validateEncryptionPlan(const QString &conf, QString &error);
     bool getDeviceOperator(const QString &conf, QList<SDeviceOperate> &infos, QString &error);
     bool getDeviceOperator(const QString &conf, QList<SPartitionOperate> &infos, QString &error);
     bool getDeviceOperator(const QString &conf, QList<SVGOperate> &infos, QString &error);

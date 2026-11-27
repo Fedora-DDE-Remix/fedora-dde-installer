@@ -130,6 +130,9 @@ void SeniorTipDialog::setContentText()
                 + ::QObject::tr("Size: At least %1\n").arg(rootSize));
     addHelpText(::QObject::tr("Swap (optional)"),
                 ::QObject::tr("zram provides swap by default. A linux-swap partition is optional and has no mount point."));
+    addHelpText(::QObject::tr("System encryption (LUKS2)"),
+                ::QObject::tr("Keep /home and other personal data inside the encrypted root; separate data and swap partitions are not supported with encryption. /boot and the EFI System Partition remain unencrypted. A passphrase is required at every start.")
+                + "\n" + ::QObject::tr("Reserve an additional 32 MiB in the root partition for LUKS2 metadata."));
 
 }
 

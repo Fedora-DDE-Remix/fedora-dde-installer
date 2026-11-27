@@ -5,6 +5,9 @@
 #include <QTimer>
 #include "CommonFunc.h"
 #include "PartitionOperateManager.h"
+#include "PartitionSeniorManager.h"
+#include "EncryptionSecret.h"
+#include "EncryptionPasswordDialog.h"
 
 const int PI_CENTER_WIDTH = 620;
 
@@ -77,7 +80,15 @@ void InstallPrepare::initUI()
 
 void InstallPrepare::initConnection()
 {
+    connect(this, &FramePluginInterface::back, this, [] {
+        EncryptionSecret::clear();
+    });
     connect(m_btnNext, &QAbstractButton::clicked, this, [=]{
+        if (PartitionSeniorManager::instance()->rootEncryptionEnabled() && !EncryptionSecret::available()) {
+            EncryptionPasswordDialog password(this);
+            if (password.exec() != QDialog::Accepted)
+                return;
+        }
         Q_EMIT next();
     });
 }

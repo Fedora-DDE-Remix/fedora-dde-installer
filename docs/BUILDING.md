@@ -51,7 +51,7 @@ definitions at commit `c2a29af363a2c573d47bdb7809e01ab454c2f5d9`:
 
 `Dtk6Log` is listed explicitly in the installer SPEC because it is needed when
 loading the Core CMake package. The runtime also explicitly requires `udisks2`
-for the D-Bus disk service, `systemd-udev` for partition identification and
+for the D-Bus disk service, `systemd-udev` for partition identification and encrypted-root activation, and
 `efibootmgr` for UEFI boot entries. Resolving these packages still requires a
 successful build in the configured Fedora 45 COPR chroot.
 
@@ -89,7 +89,7 @@ rpmbuild --define "_topdir $PWD/rpmbuild" \
 
 Uncommitted edits are not included in `git archive`. To publish a release, update
 the SPEC to use an immutable release tag and record the source commit. The
-current 0.2.2 package version alone is not a release qualification. The ISO
+current 0.3.0 package version alone is not a release qualification. The ISO
 recipe pins an immutable installer commit and records its RPM hashes; release
 qualification additionally requires the real installation jobs to pass.
 
@@ -171,6 +171,88 @@ partitioning, the backend measures the uncompressed read-only payload for the
 chosen mount layout and reserves working space. It checks actual available
 space again after mounting and before copying. Btrfs compression is not counted
 as required free space, and preserved filesystems are not assumed empty.
+
+## LUKS2 installation in 0.3.0
+
+The Live payload must include the `cryptsetup` CLI, `/usr/bin/systemd-cryptsetup`,
+dracut's crypt module and the selected filesystem utilities. Fedora 45 supplies
+the systemd helper in [`systemd-udev`](https://packages.fedoraproject.org/pkgs/systemd/systemd-udev/fedora-45-updates.html)
+(verified with `262.1-1.fc45`). Installer release `0.3.0-0.2` requires the actual
+file `/usr/bin/systemd-cryptsetup`, correcting the unresolved package dependency
+`systemd-cryptsetup`; the existing `cryptsetup` and `systemd-udev` requirements
+remain. Supported new encrypted roots are Btrfs, ext4 and XFS. The ESP
+and separate ext4 `/boot` remain unencrypted; all user data stays within the
+single encrypted root. Separate home, var, data and disk swap mounts are rejected
+in encrypted mode before partitioning. Btrfs root/home subvolumes share the same
+LUKS2 container. Existing LUKS reuse, detached headers and LVM are not implemented.
+
+The GUI passes a confirmed 8–1024-byte UTF-8 passphrase through a sealed memfd
+named `fedora-dde-crypt-passphrase`. Only preflight and partition hooks inherit
+it; `FEDORA_DDE_CRYPT_FD` contains only the descriptor number. Plans, INI files,
+argv and target key files do not contain the passphrase. The helper creates the
+physical partition without formatting the raw root as a plaintext filesystem.
+Python validates its geometry, creates LUKS2 with Argon2id and a fixed 32 MiB
+data offset, then formats the opened mapper. Capacity checks subtract that
+overhead before applying the existing inner-root minimum and payload allowance.
+
+Boot generation uses a UUID-based, password-only crypttab and `rd.luks.uuid`.
+The resulting initramfs must contain the crypt module and matching no-key-file
+crypttab. Finalization unmounts the target before closing only the mapper opened
+by this installation; cleanup can resume after a close failure. The ISO VM
+matrix includes UEFI/Btrfs on decimal 16 GB, BIOS/ext4 and UEFI/XFS encrypted
+installations. Inspect each new report: adding scenarios does not mean they
+have passed, and earlier unencrypted reports do not validate encryption.
+
+## Installation mount namespace
+
+Release `0.3.0-0.3` addresses the actual encrypted-finalize failure in
+[ISO diagnostic run 45996299589](https://github.com/Fedora-DDE-Remix/ISO-Build/actions/runs/45996299589).
+The installer's own mount table was empty after ordinary unmounts, but at least
+15 sampled system-service namespaces still contained the same Btrfs target and
+runtime bind mounts. The LUKS mapper consequently remained in use. The bounded
+sample reached its output cap, so it does not enumerate every possible holder.
+
+The core launcher now invokes the shipped `tools/scripts/fedora_namespace.py`
+executor before starting the long-lived GUI. It creates a new mount namespace,
+makes that new namespace recursively private, verifies its kernel identity and
+propagation metadata, then executes the GUI. Every hook inherits this namespace.
+PID 1 never receives the installation mounts, including mounts for source
+validation and temporary Btrfs preparation. Existing service namespaces and
+services started later therefore have no installation mounts to inherit.
+The executor does not change propagation in the Live host namespace.
+
+The GUI checks isolation before Qt initialization and device scanning. The
+backend checks it before reading installer configuration, records the actual
+namespace device/inode at preflight, and requires that identity for subsequent
+stages. It does not use an environment flag as proof, enter another process's
+namespace, or maintain a keeper daemon. Normal unmount and mapper-close success
+remain required; no forced, lazy or deferred cleanup is added.
+
+Privileged CLI automation must keep **all stages in one long-lived session**:
+
+```bash
+sudo /usr/bin/python3 -I \
+  /usr/share/fedora-dde-installer/tools/scripts/fedora_namespace.py \
+  --exec /bin/bash
+```
+
+Prepare the normal configuration and confirmed plan, then run all stages from
+that shell. Starting a new executor separately for each stage loses the shared
+mount environment and is rejected. Retries within the same GUI/shell remain
+supported. A new session cannot resume a nonfinalized state from another
+namespace; restart the Live system if the original session has exited.
+This boundary isolates mount visibility, not the actual selected disk writes.
+
+The safe-tests CI job additionally runs `tests/integration/test_mount_namespace.py`
+inside `sudo unshare --mount --propagation private`. That separate **real Linux
+kernel test** uses only disposable tmpfs/bind mounts and test-owned processes.
+A shared positive control proves that the observer detects propagation. The
+production executor must then keep its target/preparation/runtime mounts out of
+both a pre-existing observer and one created later from the simulated host,
+preserve one namespace across separate stage processes, and release mounts with
+ordinary unmounts. Its JSON evidence is uploaded on both success and failure.
+The test does not access block devices or the real `/target`; Fedora RPM/GUI and
+the exact ISO installation/disk-boot checks remain separate required evidence.
 
 ## Fedora Enforcing release profile
 

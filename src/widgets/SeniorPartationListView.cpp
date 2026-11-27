@@ -477,7 +477,7 @@ QList<SDataInfo> ItemModel::toSDataInfo(QMap<SDeviceInfo, QList<SPartitionInfo>>
             partData.isNeedFormat = partinfo.isNeedFormat;
             partData.isBiosBoot = partinfo.isBiosBoot;
             partData.isCanEncrypt = partinfo.isCanCrypt;
-            partData.isEncrypt = !partinfo.cryptPassword.isEmpty();
+            partData.isEncrypt = partinfo.isCrypt;
             if (ESpaceUsage::FREE == partinfo.usage || EPartitionType::PartitionTypeExtension != partinfo.partitionType) {
                 dataInfoList.append(partData);
             }
@@ -514,7 +514,7 @@ QList<SDataInfo> ItemModel::toSDataInfo(QMap<SDeviceInfo, QList<SPartitionInfo>>
             partData.usage = lvminfo.usage;
             partData.isNeedFormat = lvminfo.isNeedFormat;
             partData.isCanEncrypt = lvminfo.isCanCrypt;
-            partData.isEncrypt = !lvminfo.cryptPassword.isEmpty();
+            partData.isEncrypt = lvminfo.isCrypt;
             dataInfoList.append(partData);
         }
     }

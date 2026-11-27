@@ -6,6 +6,7 @@
 
 #include <DSuggestButton>
 #include <DLabel>
+#include <DCheckBox>
 
 class FramePluginInterface;
 class TitleWidget;
@@ -36,6 +37,8 @@ private:
     QMap<SDeviceInfo, QList<SPartitionInfo>> m_devs;
     QMap<SVGInfo, QList<SLVMInfo>> m_vgs;
     DLabel *m_tipLabel = Q_NULLPTR;
+    DCheckBox *m_encryptRoot = Q_NULLPTR;
+    DLabel *m_encryptionTip = Q_NULLPTR;
 };
 
 #endif // CUSTOMPARTITION_H

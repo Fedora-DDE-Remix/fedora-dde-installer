@@ -5,4 +5,5 @@ unset LD_PRELOAD LD_LIBRARY_PATH PYTHONPATH PYTHONHOME BASH_ENV ENV
 [[ "$EUID" -eq 0 && "$#" -eq 0 ]] || exit 1
 source /usr/share/fedora-dde-installer/tools/scripts/init_environment.sh
 /usr/share/fedora-dde-installer/tools/fedora-dde-installer-preinit
-exec /usr/bin/fedora-dde-installer
+exec /usr/bin/python3 -I /usr/share/fedora-dde-installer/tools/scripts/fedora_namespace.py \
+    --exec /usr/bin/fedora-dde-installer

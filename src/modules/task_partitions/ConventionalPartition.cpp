@@ -12,6 +12,11 @@ ConventionalPartition::~ConventionalPartition()
 
 bool ConventionalPartition::start(const QString &config, QString &err)
 {
+    // Validate the encryption contract before any table or partition changes.
+    // The Python backend performs LUKS2 formatting after verifying the actual
+    // physical partition returned by this helper. This process never gets a key.
+    if (!PartitionTaskManager::instance()->validateEncryptionPlan(config, err))
+        return false;
     if (!diskTask(config, err)) {
         return false;
     }
@@ -146,24 +151,6 @@ bool ConventionalPartition::partitionTask(const QString &config, QList<SPartitio
                 break;
         }
 
-        if (in.partition.isCrypt && (!in.partition.cryptPassword.isEmpty()) && (in.operate == EPartitionOperate::PartitionCreate || in.operate == EPartitionOperate::PartitionEdit)) {
-            CommonFunc::setRecoveryKey();
-            // 设置加密卷标签
-            QString cryptLabel = (!in.partition.mountPoint.compare("/")) ? "System" : in.partition.mountPoint;
-
-            // 处理分区加密
-            if (!CommonFunc::cryptsetupPartition(QByteArray::fromBase64(in.partition.cryptPassword.toLocal8Bit()), cryptLabel, in.partition.path, err)) {
-                return false;
-            }
-
-            // 格式化加密分区
-            if (!CommonFunc::formatPartitionOK(in.partition, err)) {
-                return false;
-            }
-
-            CommonFunc::setSettingsValue("DI_CRYPT_PASSWORD", in.partition.cryptPassword);
-            CommonFunc::setSettingsValue("DI_CRYPT_DEVICE", in.partition.path);
-        }
     }
 
     return true;
@@ -234,25 +221,6 @@ bool ConventionalPartition::lvmTask(const QString &config, QList<SLVMOperate> &i
             default:break;
         }
 
-        if ((in.operate == EPartitionOperate::PartitionCreate || in.operate == EPartitionOperate::PartitionEdit)
-                && in.lvm.isCrypt && !(in.lvm.cryptPassword.isEmpty())) {
-            CommonFunc::setRecoveryKey();
-            // 设置加密卷标签
-            QString cryptLabel = (!in.lvm.mountPoint.compare("/")) ? "System" : "";
-
-            // 处理分区加密
-            if (!CommonFunc::cryptsetupPartition(QByteArray::fromBase64(in.lvm.cryptPassword.toLocal8Bit()), cryptLabel, in.lvm.path, err)) {
-                return false;
-            }
-
-            // 格式化加密分区
-            if (!CommonFunc::formatPartitionOK(in.lvm, err)) {
-                return false;
-            }
-
-            CommonFunc::setSettingsValue("DI_CRYPT_PASSWORD", in.lvm.cryptPassword);
-            CommonFunc::setSettingsValue("DI_CRYPT_DEVICE", in.lvm.path);
-        }
 
     }
 

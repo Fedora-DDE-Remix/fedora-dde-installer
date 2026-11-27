@@ -37,7 +37,8 @@
 | UEFI | `/boot/efi` 使用 FAT32 EFI 系统分区，可复用现有 ESP；使用 Fedora 软件包中的 shim/GRUB 文件 |
 | BIOS | 仅 x86_64、单磁盘；新建 GPT + 1 MiB `bios_grub`，也可安装到现有 MBR 布局 |
 | 最小安装容量 | 默认整盘初筛 14 GiB、根分区 12 GiB；还按本次 payload 的实际占用和各分区余量检查，小盘是否可安装以实际测量为准 |
-| 当前不支持 | 加密安装、LVM 安装、镜像克隆、不可变系统部署、首次开机再创建账户 |
+| 加密安装 | 可选 LUKS2；容器内支持 Btrfs、ext4、XFS，ESP 和独立 `/boot` 保持明文；默认 Btrfs 的 root、home 子卷共用加密容器 |
+| 当前不支持 | 复用已有加密容器、独立加密 home/swap、多容器加密、LVM 安装、镜像克隆、不可变系统部署、首次开机再创建账户 |
 
 手工分区时，根分区和 `/boot` 都必须新建或明确选择格式化。其他分区能否保留，
 以界面显示的操作计划为准。此版本要求独立 `/boot`，不接受把它放在根文件系统内。
@@ -49,6 +50,33 @@
 2 GiB 余量，`/boot` 为生成内核及救援镜像保留额外空间。挂载目标后、复制前还会
 核对实际可用空间，不依赖 Btrfs 压缩率来保证能够安装。16 GB（十进制）是本次
 ISO 虚拟机验证的目标容量，并不是对所有未来镜像大小的固定承诺。
+
+## 加密安装
+
+0.3.0 在全盘和手动分区入口提供加密选项。勾选后，在分区写入前设置并确认
+8–1024 UTF-8 字节的口令。开机需要输入该口令；账户信息仍在当前 Live 安装会话中
+配置，不需要先重启。口令不会写入分区 JSON、安装器 INI、进程命令行或目标密钥文件，
+前后端通过已封印的匿名内存文件传递。
+
+加密布局要求新格式化的根分区、独立 ext4 `/boot`，UEFI 还需要 FAT32 ESP。
+Btrfs 的 `root` 和 `home` 子卷都在同一 LUKS2 容器中；ext4/XFS 的 home 是根内目录。
+加密模式暂不接受独立 `/home`、`/var`、其他数据挂载点或磁盘 swap，避免将个人数据
+放到未加密分区。默认 zram 可继续使用。已有 LUKS 容器解锁复用、隐藏或分离头、
+多容器、LVM 和恢复密钥导出不属于本版支持范围。
+
+后端为 LUKS2 头预留 32 MiB，并按容器内有效容量检查原有 12 GiB 根分区下限和
+payload 余量。安装使用 Argon2id 口令槽，生成基于 UUID 的 `/etc/crypttab` 与
+`rd.luks.uuid`，检查 dracut 的 crypt 模块和无密钥文件的启动配置。完成后先卸载目标，
+再关闭本次安装打开的 mapper。0.3.0 的加密安装实测结果以对应新镜像报告为准，
+旧版未加密安装报告不能证明这些新增路径通过。
+
+`0.3.0-0.3` 将整个 GUI 和全部安装阶段放入同一个私有挂载命名空间。Live 的系统
+服务看不到安装源、临时 Btrfs 挂载和 `/target`，安装完成时可以正常卸载这些挂载并
+关闭加密映射。后端同时核对保存的命名空间身份；直接在宿主环境运行后端会明确拒绝。
+正常安装仍在同一次 Live 启动中配置账户。若 GUI 异常退出并丢失原安装会话，应重启
+Live 环境后重新操作；新会话不会接管未完成的旧状态或自动重复分区。
+真实内核隔离、原生 RPM 和新 ISO 的验证结果仍需分别检查，见
+[构建与验证说明](docs/BUILDING.md#installation-mount-namespace)。
 
 ## 与 Fedora 官方安装结果对齐
 
@@ -64,7 +92,7 @@ Wi-Fi/VPN，不执行 Anaconda/Kickstart 的任意安装后脚本。差异、ISO
 
 ## 开发状态与验证边界
 
-当前源码版本为 0.2.2。发布验证由 [ISO-Build 的构建与安装测试](https://github.com/Fedora-DDE-Remix/ISO-Build/actions)
+当前源码版本为 0.3.0。发布验证由 [ISO-Build 的构建与安装测试](https://github.com/Fedora-DDE-Remix/ISO-Build/actions)
 记录；更新版本号或通过单元测试不等于镜像已经通过实际安装。
 
 2026-11-23（北京时间）的 [GitHub Actions 构建](https://github.com/Fedora-DDE-Remix/fedora-dde-installer/actions/runs/45055520645)
@@ -178,7 +206,7 @@ EROFS/SquashFS 或普通 Fedora Live 根镜像；不会把正在运行的 `/` �
 调试时显式指定的源也必须是独立只读挂载。默认 profile 要求 Live 内核启用
 SELinux，允许 permissive 模式，并要求已标记且配置为 enforcing 的 payload。
 
-### 本次测试 ISO：禁用 SELinux、保留 DDM 5
+### 历史调试配置：禁用 SELinux、保留 DDM 5
 
 ISO-Build 在原始只读 payload 中安装 root 拥有、其他用户不可写的
 `/etc/fedora-dde-installer/install-profile.json`：
