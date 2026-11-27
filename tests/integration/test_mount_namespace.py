@@ -9,12 +9,14 @@ device, real /target, disk utility, lazy unmount, or host service is involved.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import select
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -235,13 +237,40 @@ def exercise(report):
                 "The production verifier accepted the shared host-like fixture")
         report["shared_namespace_rejected"] = True
 
-        public = root / "unprivileged-check"
+        # A GitHub checkout may be below a non-traversable runner home. Recreate
+        # the installed root-owned/readable code permissions inside our tmpfs;
+        # never change permissions on the runner's checkout or home directory.
+        code = root / "unprivileged-code"
+        code.mkdir(mode=0o755)
+        code.chmod(0o755)
+        require(code.stat().st_uid == 0 and stat.S_IMODE(code.stat().st_mode) == 0o755,
+                "The non-root test code directory is not root-owned and readable")
+        report["unprivileged_code_inputs"] = []
+        for source in (EXECUTOR, EXECUTOR.with_name("fedora_backend.py")):
+            copied = code / source.name
+            content = source.read_bytes()
+            copied.write_bytes(content)
+            copied.chmod(0o644)
+            original_hash = hashlib.sha256(content).hexdigest()
+            copied_hash = hashlib.sha256(copied.read_bytes()).hexdigest()
+            require(original_hash == copied_hash and copied.stat().st_uid == 0
+                    and stat.S_IMODE(copied.stat().st_mode) == 0o644,
+                    "The non-root test code differs from the production source")
+            report["unprivileged_code_inputs"].append({"name": source.name,
+                                                       "source_sha256": original_hash,
+                                                       "copy_sha256": copied_hash,
+                                                       "owner_uid": 0, "mode": "0644"})
+        public = root / "unprivileged-output"
         public.mkdir(mode=0o777)
         public.chmod(0o777)
         marker = public / "unexpected-execution"
-        rejected = subprocess.run([PYTHON, "-I", str(EXECUTOR), "--exec", "/usr/bin/touch", str(marker)],
-                                  user=65534, group=65534, extra_groups=[], text=True,
+        rejected = subprocess.run([PYTHON, "-I", str(code / EXECUTOR.name), "--exec", "/usr/bin/touch", str(marker)],
+                                  user=65534, group=65534, extra_groups=[], cwd=public, text=True,
                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=DEADLINE)
+        report["unprivileged_exec"] = {"uid": 65534, "returncode": rejected.returncode,
+                                       "stderr": rejected.stderr[-4000:],
+                                       "stdout": rejected.stdout[-4000:],
+                                       "marker_exists": marker.exists()}
         require(rejected.returncode != 0 and "requires root privileges" in rejected.stderr
                 and not marker.exists(), "An unprivileged executor request was not rejected before execution")
         report["unprivileged_exec_rejected"] = True
