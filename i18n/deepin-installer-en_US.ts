@@ -2381,6 +2381,86 @@ Root and /home share Btrfs space unless /home is separate.
         <source>Swap uses zram by default. An on-disk swap partition is optional.</source>
         <translation>Swap uses zram by default. An on-disk swap partition is optional.</translation>
     </message>
+    <message>
+        <source>Use a passphrase of 8 to 1024 UTF-8 bytes without line breaks.</source>
+        <translation>Use a passphrase of 8 to 1024 UTF-8 bytes without line breaks.</translation>
+    </message>
+    <message>
+        <source>Could not keep the encryption passphrase in protected memory. Please try again.</source>
+        <translation>Could not keep the encryption passphrase in protected memory. Please try again.</translation>
+    </message>
+    <message>
+        <source>Could not pass the encryption key to the installation process.</source>
+        <translation>Could not pass the encryption key to the installation process.</translation>
+    </message>
+    <message>
+        <source>Could not start the installation process.</source>
+        <translation>Could not start the installation process.</translation>
+    </message>
+    <message>
+        <source>Encrypt the installed system</source>
+        <translation>Encrypt the installed system</translation>
+    </message>
+    <message>
+        <source>System and personal files will be encrypted. The EFI System Partition and /boot remain unencrypted so the computer can start. Enter this passphrase each time you start the installed system.</source>
+        <translation>System and personal files will be encrypted. The EFI System Partition and /boot remain unencrypted so the computer can start. Enter this passphrase each time you start the installed system.</translation>
+    </message>
+    <message>
+        <source>Encryption passphrase</source>
+        <translation>Encryption passphrase</translation>
+    </message>
+    <message>
+        <source>Confirm passphrase</source>
+        <translation>Confirm passphrase</translation>
+    </message>
+    <message>
+        <source>Keep the passphrase safe. It is separate from your login password; losing it means losing access to the encrypted files.</source>
+        <translation>Keep the passphrase safe. It is separate from your login password; losing it means losing access to the encrypted files.</translation>
+    </message>
+    <message>
+        <source>The passphrases do not match.</source>
+        <translation>The passphrases do not match.</translation>
+    </message>
+    <message>
+        <source>Encrypt system</source>
+        <translation>Encrypt system</translation>
+    </message>
+    <message>
+        <source>Choose exactly one root partition before enabling encryption.</source>
+        <translation>Choose exactly one root partition before enabling encryption.</translation>
+    </message>
+    <message>
+        <source>Encrypted installation keeps personal files inside the root filesystem. Remove separate data and swap mount points, or turn off encryption. zram remains available.</source>
+        <translation>Encrypted installation keeps personal files inside the root filesystem. Remove separate data and swap mount points, or turn off encryption. zram remains available.</translation>
+    </message>
+    <message>
+        <source>LUKS2 encryption requires a freshly formatted Btrfs, ext4 or XFS root partition. Boot partitions cannot be encrypted.</source>
+        <translation>LUKS2 encryption requires a freshly formatted Btrfs, ext4 or XFS root partition. Boot partitions cannot be encrypted.</translation>
+    </message>
+    <message>
+        <source>The encrypted root partition needs at least %1 GiB for files plus 32 MiB for LUKS2 metadata.</source>
+        <translation>The encrypted root partition needs at least %1 GiB for files plus 32 MiB for LUKS2 metadata.</translation>
+    </message>
+    <message>
+        <source>Encrypt the root filesystem (LUKS2)</source>
+        <translation>Encrypt the root filesystem (LUKS2)</translation>
+    </message>
+    <message>
+        <source>Keep /home and other personal data inside the encrypted root; separate data and swap partitions are not supported with encryption. /boot and the EFI System Partition remain unencrypted. A passphrase is required at every start.</source>
+        <translation>Keep /home and other personal data inside the encrypted root; separate data and swap partitions are not supported with encryption. /boot and the EFI System Partition remain unencrypted. A passphrase is required at every start.</translation>
+    </message>
+    <message>
+        <source>System encryption (LUKS2)</source>
+        <translation>System encryption (LUKS2)</translation>
+    </message>
+    <message>
+        <source>Reserve an additional 32 MiB in the root partition for LUKS2 metadata.</source>
+        <translation>Reserve an additional 32 MiB in the root partition for LUKS2 metadata.</translation>
+    </message>
+    <message>
+        <source>LUKS2 encrypted %1</source>
+        <translation>LUKS2 encrypted %1</translation>
+    </message>
 </context>
 <context>
     <name>SelectFileWidget</name>

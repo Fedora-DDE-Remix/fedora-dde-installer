@@ -89,7 +89,7 @@ rpmbuild --define "_topdir $PWD/rpmbuild" \
 
 Uncommitted edits are not included in `git archive`. To publish a release, update
 the SPEC to use an immutable release tag and record the source commit. The
-current 0.2.2 package version alone is not a release qualification. The ISO
+current 0.3.0 package version alone is not a release qualification. The ISO
 recipe pins an immutable installer commit and records its RPM hashes; release
 qualification additionally requires the real installation jobs to pass.
 
@@ -171,6 +171,33 @@ partitioning, the backend measures the uncompressed read-only payload for the
 chosen mount layout and reserves working space. It checks actual available
 space again after mounting and before copying. Btrfs compression is not counted
 as required free space, and preserved filesystems are not assumed empty.
+
+## LUKS2 installation in 0.3.0
+
+The Live payload must include `cryptsetup`, `systemd-cryptsetup`, dracut's crypt
+module and the selected filesystem utilities. The installer RPM declares these
+dependencies. Supported new encrypted roots are Btrfs, ext4 and XFS. The ESP
+and separate ext4 `/boot` remain unencrypted; all user data stays within the
+single encrypted root. Separate home, var, data and disk swap mounts are rejected
+in encrypted mode before partitioning. Btrfs root/home subvolumes share the same
+LUKS2 container. Existing LUKS reuse, detached headers and LVM are not implemented.
+
+The GUI passes a confirmed 8–1024-byte UTF-8 passphrase through a sealed memfd
+named `fedora-dde-crypt-passphrase`. Only preflight and partition hooks inherit
+it; `FEDORA_DDE_CRYPT_FD` contains only the descriptor number. Plans, INI files,
+argv and target key files do not contain the passphrase. The helper creates the
+physical partition without formatting the raw root as a plaintext filesystem.
+Python validates its geometry, creates LUKS2 with Argon2id and a fixed 32 MiB
+data offset, then formats the opened mapper. Capacity checks subtract that
+overhead before applying the existing inner-root minimum and payload allowance.
+
+Boot generation uses a UUID-based, password-only crypttab and `rd.luks.uuid`.
+The resulting initramfs must contain the crypt module and matching no-key-file
+crypttab. Finalization unmounts the target before closing only the mapper opened
+by this installation; cleanup can resume after a close failure. The ISO VM
+matrix includes UEFI/Btrfs on decimal 16 GB, BIOS/ext4 and UEFI/XFS encrypted
+installations. Inspect each new report: adding scenarios does not mean they
+have passed, and earlier unencrypted reports do not validate encryption.
 
 ## Fedora Enforcing release profile
 

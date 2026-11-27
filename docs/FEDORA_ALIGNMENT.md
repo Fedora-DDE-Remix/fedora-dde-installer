@@ -85,7 +85,9 @@ DDM 原生 Fedora PAM 和 SELinux 策略包。compose 检查策略注册及最�
 ## 仍然存在的差异
 
 1. **安装引擎**：当前仍为自己的阶段调度与 libparted helper，不是完整 Anaconda/
-   Blivet。未支持 LUKS、LVM、软件 RAID、复杂多磁盘策略和 FIPS 安装。
+   Blivet。0.3.0 新增单容器 LUKS2 根分区安装，支持 Btrfs/ext4/XFS，个人数据
+   留在加密根内；尚未支持已有 LUKS 复用、独立加密 home/swap、LVM、软件 RAID、
+   复杂多磁盘策略和 FIPS 安装。ESP 与独立 `/boot` 保持明文。
 2. **网络**：目标继承原始 payload 的网络默认值；尚未迁移 Live 会话后来建立的
    Wi-Fi、VPN 或带证书连接。未来需对明确选定的 NetworkManager profile 做有权限
    控制的迁移，不能通过复制整个运行中 `/etc` 实现。

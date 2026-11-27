@@ -14,7 +14,8 @@
 #include "ResetListDialog.h"
 #include "HelpLabel.h"
 #include "HelpDialog.h"
-#include "PasswdDialog.h"
+#include "EncryptionPasswordDialog.h"
+#include "EncryptionSecret.h"
 #include <QLabel>
 #include <QHBoxLayout>
 #include <QPushButton>
@@ -39,6 +40,7 @@ SeniorPartitionFrame::SeniorPartitionFrame(QWidget *parent):PartitionFrameBase(p
         if (dialog.exec() == DDialog::Accepted) {
             PartitionSeniorManager::instance()->resetDisk();
             PartitionSeniorManager::instance()->clearCryptList();
+            m_encryptRoot->setChecked(false);
             updateInstallInfo(PartitionSeniorManager::instance()->getSystemPartitionInfo(),
                               PartitionSeniorManager::instance()->getSystemLVMInfo());
             this->updateTips("");
@@ -127,6 +129,23 @@ SeniorPartitionFrame::SeniorPartitionFrame(QWidget *parent):PartitionFrameBase(p
     listLayout->setContentsMargins(0, 0, 0, 0);
     listLayout->setSpacing(0);
     listLayout->addSpacing(glayoutSpacing);
+
+    m_encryptRoot = new DCheckBox(this);
+    m_encryptionTip = new DLabel(this);
+    m_encryptionTip->setWordWrap(true);
+    m_encryptionTip->setMaximumWidth(CommonFunc::isBigScreen() ? 980 : 680);
+    m_encryptionTip->hide();
+    listLayout->addWidget(m_encryptRoot, 0, Qt::AlignHCenter);
+    listLayout->addWidget(m_encryptionTip, 0, Qt::AlignHCenter);
+    connect(m_encryptRoot, &DCheckBox::toggled, this, [this](bool checked) {
+        m_encryptionTip->setVisible(checked);
+        EncryptionSecret::clear();
+        if (!checked) {
+            QString error;
+            PartitionSeniorManager::instance()->setRootEncryption(false, error);
+            updateInstallInfo(PartitionSeniorManager::instance()->getSystemPartitionInfo(), {});
+        }
+    });
     listLayout->addLayout(btnLayout);
     listLayout->addSpacing(glayoutSpacing);
     listLayout->addLayout(viewLayout);
@@ -293,7 +312,8 @@ SeniorPartitionFrame::SeniorPartitionFrame(QWidget *parent):PartitionFrameBase(p
     connect(m_nextBtn, &DSuggestButton::clicked, this, [=] {
         QString log;
         SPartitionInfo bootloader;
-        if (!PartitionSeniorManager::instance()->checkPartition(log)) {
+        if (!PartitionSeniorManager::instance()->setRootEncryption(m_encryptRoot->isChecked(), log)
+                || !PartitionSeniorManager::instance()->checkPartition(log)) {
             this->updateTips(log);
         } else if (!PartitionSeniorManager::instance()->findFirstESP(bootloader)) {
             this->updateTips(QString(::QObject::tr("The %1 boot partition must be a primary partition and the first partition on the disk")).arg(bootloader.mountPoint));
@@ -306,6 +326,11 @@ SeniorPartitionFrame::SeniorPartitionFrame(QWidget *parent):PartitionFrameBase(p
             }
             // Fedora uses zram by default. Explicit swap partitions remain
             // available in the filesystem selector without a mandatory prompt.
+            if (m_encryptRoot->isChecked()) {
+                EncryptionPasswordDialog password(this);
+                if (password.exec() != QDialog::Accepted)
+                    return;
+            }
             Q_EMIT this->next();
         }
     });
@@ -402,60 +427,15 @@ bool SeniorPartitionFrame::filterGhostDisk(const QString &devPath)
 
 void SeniorPartitionFrame::encryptSinglePartition(const QString &partId)
 {
-    PasswdDialog encryptDlg(this);
-    encryptDlg.setAutoDecryptVisible(!PartitionSeniorManager::instance()->find(partId).mountPoint.isEmpty() && CommonFunc::isTPM());
-    if (QDialog::Accepted == encryptDlg.exec()) {
-        QString strpwd = encryptDlg.getPasswd();
-        bool bAuto = encryptDlg.autoDecryptIsChecked();
-        qInfo() << "user encrypt partition:" << partId;
-        PartitionSeniorManager::instance()->updateEncryptStatus(partId, strpwd, bAuto, true);
-
-        for (SDeviceInfo devItem : PartitionOperateManager::instance()->getCurrentDevice()) {
-            QString partToDev = PartitionSeniorManager::instance()->find(partId).device;
-            if (!partToDev.isEmpty()) {
-                SDeviceInfo devItemSet = PartitionSeniorManager::instance()->findDev(partToDev);
-                PartitionSeniorManager::instance()->setHideCryptParts(devItemSet);
-                break;
-            }
-        }
-
-        QMap<SDeviceInfo, QList<SPartitionInfo>> devs = PartitionSeniorManager::instance()->getSystemPartitionInfo();
-        QMap<SVGInfo, QList<SLVMInfo>> vgs = PartitionSeniorManager::instance()->getSystemLVMInfo();
-        this->updateInstallInfo(devs, vgs);
-    }
+    if (PartitionSeniorManager::instance()->find(partId).mountPoint == "/")
+        m_encryptRoot->setChecked(true);
 }
 
 void SeniorPartitionFrame::decryptSinglePartition(const QString &partId, const QString &mountPoint)
 {
-    DDialog decryptDlg;
-    decryptDlg.setTitle(tr("Are you sure to cancel encrypt %1?").arg(mountPoint));
-    decryptDlg.addSpacing(30);
-    decryptDlg.addButton(::QObject::tr("Cancel"));
-    decryptDlg.addButton(::QObject::tr("Confirm"), true, DDialog::ButtonWarning);
-    connect(&decryptDlg, &DDialog::visibleChanged, [&](bool visible){
-        if(visible) {
-            decryptDlg.moveToCenter();
-        }
-    });
-    decryptDlg.move(qApp->primaryScreen()->availableSize().width() / 2 - decryptDlg.width() / 2,
-                    qApp->primaryScreen()->availableSize().height() / 2 - decryptDlg.height() / 2);
-    if(QDialog::Accepted == decryptDlg.exec()) {
-        qInfo() << "user cancel encrypt partition";
-        PartitionSeniorManager::instance()->updateEncryptStatus(partId, "", false, false);
-
-        for (SDeviceInfo devItem : PartitionOperateManager::instance()->getCurrentDevice()) {
-            QString partToDev = PartitionSeniorManager::instance()->find(partId).device;
-            if (!partToDev.isEmpty()) {
-                SDeviceInfo devItemSet = PartitionSeniorManager::instance()->findDev(partToDev);
-                PartitionSeniorManager::instance()->setHideCryptParts(devItemSet);
-                break;
-            }
-        }
-
-        QMap<SDeviceInfo, QList<SPartitionInfo>> devs = PartitionSeniorManager::instance()->getSystemPartitionInfo();
-        QMap<SVGInfo, QList<SLVMInfo>> vgs = PartitionSeniorManager::instance()->getSystemLVMInfo();
-        this->updateInstallInfo(devs, vgs);
-    }
+    Q_UNUSED(partId);
+    Q_UNUSED(mountPoint);
+    m_encryptRoot->setChecked(false);
 }
 
 void SeniorPartitionFrame::updateTs()
@@ -468,6 +448,8 @@ void SeniorPartitionFrame::updateTs()
     m_lvmCreate->setText(::QObject::tr("Create LVM"));
 
     m_nextBtn->setText(::QObject::tr("Next"));
+    m_encryptRoot->setText(::QObject::tr("Encrypt the root filesystem (LUKS2)"));
+    m_encryptionTip->setText(::QObject::tr("Keep /home and other personal data inside the encrypted root; separate data and swap partitions are not supported with encryption. /boot and the EFI System Partition remain unencrypted. A passphrase is required at every start."));
     m_helpShowDialog->updateTs();
     m_lvmFrame->updateTs();
 }
@@ -487,6 +469,7 @@ void SeniorPartitionFrame::initDeviceInfo(const QMap<SDeviceInfo, QList<SPartiti
     Q_UNUSED(vgs);
     m_model->setDatas(devs, {});
     PartitionSeniorManager::instance()->clearCryptList();
+    m_encryptRoot->setChecked(PartitionSeniorManager::instance()->rootEncryptionEnabled());
     updateTips("");
     if (devs.isEmpty()) {
         // 错误显示

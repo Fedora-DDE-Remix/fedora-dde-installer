@@ -10,12 +10,14 @@ retained on failure so a failed account step never becomes a successful install.
 from __future__ import annotations
 
 import argparse
+import ctypes
 import hashlib
 import json
 import os
 from pathlib import Path
 import platform
 import re
+import resource
 import shutil
 import stat
 import subprocess
@@ -52,6 +54,18 @@ def require(condition: bool, message: str) -> None:
         raise InstallError(message)
 
 
+def protect_process_secrets() -> None:
+    """Disable dumps before loading credentials, including piped core handlers."""
+    resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+    try:
+        prctl = ctypes.CDLL(None, use_errno=True).prctl
+        prctl.argtypes = [ctypes.c_int, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong, ctypes.c_ulong]
+        prctl.restype = ctypes.c_int
+        require(prctl(4, 0, 0, 0, 0) == 0, "Cannot disable installer process dumps.")  # PR_SET_DUMPABLE
+    except (AttributeError, OSError) as error:
+        raise InstallError("Cannot disable installer process dumps.") from error
+
+
 def parse_mounts(value: str) -> list[dict[str, str]]:
     """Parse the existing partition helper's device=mount[options] protocol."""
     result = []
@@ -85,8 +99,6 @@ def validate_plan(plan: object) -> list[str]:
             continue  # Untouched devices are present in the GUI's complete plan.
         require(item.get("type") in {"disk", "partition"},
                 "This release supports ordinary partitions; LVM is not enabled.")
-        require(not any(item.get(key) for key in ("isCrypt", "isCryptHeader", "isNeedCryptHeader", "cryptPassword")),
-                "Encrypted installation is not supported by this Fedora backend.")
         device = item.get("device", "")
         require(isinstance(device, str) and bool(DEVICE_RE.fullmatch(device)) and ".." not in Path(device).parts,
                 "A partition plan device is invalid.")
@@ -123,6 +135,8 @@ def validate_plan(plan: object) -> list[str]:
             require(item.get("isneedformat") is True,
                     "The target root must be newly created or explicitly selected for formatting.")
     require(len(roots) == 1, "Select exactly one target root filesystem.")
+    from fedora_crypto import encrypted_root
+    encrypted_root(plan)
     return sorted(devices)
 
 
@@ -170,7 +184,7 @@ class Runner:
         # Never log input_text: chpasswd receives the password only through stdin.
         env = dict(os.environ, LC_ALL="C", LANG="C", SYSTEMD_OFFLINE="1",
                    PATH="/usr/sbin:/usr/bin:/sbin:/bin")
-        for key in ("LD_PRELOAD", "LD_LIBRARY_PATH", "PYTHONPATH", "PYTHONHOME", "BASH_ENV", "ENV"):
+        for key in ("LD_PRELOAD", "LD_LIBRARY_PATH", "PYTHONPATH", "PYTHONHOME", "BASH_ENV", "ENV", "FEDORA_DDE_CRYPT_FD"):
             env.pop(key, None)
         result = subprocess.run(argv, input=input_text, text=True, encoding="utf-8", env=env,
                                 stdout=subprocess.PIPE if capture else None,
@@ -307,6 +321,7 @@ class Backend:
         validate_root(self, source)
 
     def preflight(self) -> None:
+        from fedora_crypto import encrypted_root, read_passphrase, verify_requirements
         from fedora_space import prepare as prepare_space
         from fedora_boot import firmware_suffix
         from fedora_payload import prepare_source, release_source, rooted_path
@@ -331,8 +346,9 @@ class Backend:
         require(Path(PARTITION_TOOL).is_file(), "The Fedora partition helper is not installed.")
         require(self.config.get("DI_PARTITION_TYPE", "0") in ALLOWED_MODES,
                 "Choose a normal full-disk, manual or free-space installation.")
-        require(not self.config.get("DI_CRYPT_PASSWORD") and self.config.get("DI_IS_GHOST_MODE", "false") != "true",
-                "Encrypted and disk-clone installation modes are not supported.")
+        require(not self.config.get("DI_CRYPT_PASSWORD"),
+                "Encryption passphrases must use the private descriptor, never the installer configuration.")
+        require(self.config.get("DI_IS_GHOST_MODE", "false") != "true", "Disk-clone installation is not supported.")
         require(not self.target.is_symlink() and not os.path.ismount(self.target),
                 "The target is already mounted. Finish or explicitly release the existing installation first.")
         plan_path = Path(self.config.get("DI_PARTITION_CONFIG"))
@@ -341,6 +357,11 @@ class Backend:
         plan = json.loads(plan_bytes)
         devices = validate_plan(plan)
         tables = validate_layout(self, plan, devices, uefi)
+        encryption = encrypted_root(plan) is not None
+        if encryption:
+            require(self.config.get("DI_IS_AUTO_DECRYPT", "false").lower() != "true",
+                    "Automatic key-file unlocking is not supported; encrypted boot requires the passphrase.")
+            read_passphrase()  # Validate the anonymous channel before any disk change.
         for device in devices:
             require(stat.S_ISBLK(os.stat(device).st_mode), f"Not a block device: {device}")
             mounted = self.run("lsblk", "--noheadings", "--raw", "--output", "MOUNTPOINTS", device).stdout.strip()
@@ -348,6 +369,7 @@ class Backend:
         source_state = prepare_source(self)
         source = Path(source_state["source"])
         try:
+            verify_requirements(self, source, plan, source_state)
             space_requirements = prepare_space(self, source, plan)
             require(rooted_path(source, "usr/lib/systemd/system/ddm.service").is_file(), "The Live image must include DDM.")
             if not selinux_disabled(source_state):
@@ -378,6 +400,7 @@ class Backend:
                       "architecture": architecture, "uefi": uefi, "efi_suffix": suffix, "devices": devices,
                       "partition_tables": tables, "live_kernel_cmdline": commandline,
                       "space_requirements": space_requirements,
+                      "encryption_requested": encryption, "owned_mappers": [],
                       "plan_path": str(plan_path), "plan_sha256": hashlib.sha256(plan_bytes).hexdigest(),
                       "installation_id": str(uuid.uuid4()), "owned_mounts": [], "mounts": []}
         self.save("preflight")
@@ -385,6 +408,7 @@ class Backend:
         self.progress(1)
 
     def partition(self) -> None:
+        from fedora_crypto import encrypted_root, read_passphrase, create_root, cleanup_partition_failure
         from fedora_payload import verify_source
         from fedora_space import validate_capacity
         from fedora_storage import mount_filesystems, verify_bios_area
@@ -392,34 +416,48 @@ class Backend:
         plan_bytes = Path(self.state["plan_path"]).read_bytes()
         require(hashlib.sha256(plan_bytes).hexdigest() == self.state["plan_sha256"],
                 "The partition plan changed after validation. Review it again.")
+        plan = json.loads(plan_bytes)
+        encryption = encrypted_root(plan) is not None
+        require(encryption == self.state.get("encryption_requested", False), "The encryption choice changed after review.")
+        secret = read_passphrase() if encryption else None
         verify_source(self)  # Check again before the first destructive operation.
-        validate_capacity(json.loads(plan_bytes), self.state.get("space_requirements", {}))
+        validate_capacity(plan, self.state.get("space_requirements", {}))
         # Mark before the destructive helper: retries must never silently format again.
         self.save("partitioning")
-        self.config.set("DI_MOUNTS_POINTS", "")
-        self.run(PARTITION_TOOL, "-m", self.config.get("DI_PARTITION_TYPE", "0"),
-                 "-c", self.state["plan_path"], capture=False)
-        self.run("udevadm", "settle")
-        verify_bios_area(self)
-        mappings = parse_mounts(self.config.get("DI_MOUNTS_POINTS"))
-        require(any(item["mountpoint"] == "/boot" for item in mappings),
-                "The partition helper did not return the required separate /boot partition.")
-        require(not self.state["uefi"] or any(item["mountpoint"] == "/boot/efi" for item in mappings),
-                "UEFI installation requires an EFI System Partition mounted at /boot/efi.")
-        for mapping in mappings:
-            disk = self.run("lsblk", "-nro", "PKNAME", "--paths", mapping["device"]).stdout.strip()
-            require(disk in self.state["devices"], "The partition helper returned a device outside the confirmed disks.")
-            if mapping["mountpoint"] == "/boot/efi":
-                properties = self.run("udevadm", "info", "--query=property", "--name", mapping["device"]).stdout
-                number = next((line.split("=", 1)[1] for line in properties.splitlines()
-                               if line.startswith("ID_PART_ENTRY_NUMBER=")), "")
-                require(number.isdigit(), "Cannot identify the EFI partition number.")
-                self.run("parted", "--script", disk, "set", number, "esp", "on")
-        mount_filesystems(self, mappings)
-        self.state["mount_identity"] = self.mount_identity()
-        self.state["mount_identities"] = {point: self.mount_identity(Path(point))
-                                          for point in self.state["owned_mounts"]}
-        self.save("partitioned")
+        try:
+            self.config.set("DI_MOUNTS_POINTS", "")
+            self.run(PARTITION_TOOL, "-m", self.config.get("DI_PARTITION_TYPE", "0"),
+                     "-c", self.state["plan_path"], capture=False)
+            self.run("udevadm", "settle")
+            verify_bios_area(self)
+            mappings = parse_mounts(self.config.get("DI_MOUNTS_POINTS"))
+            require(any(item["mountpoint"] == "/boot" for item in mappings),
+                    "The partition helper did not return the required separate /boot partition.")
+            require(not self.state["uefi"] or any(item["mountpoint"] == "/boot/efi" for item in mappings),
+                    "UEFI installation requires an EFI System Partition mounted at /boot/efi.")
+            for mapping in mappings:
+                disk = self.run("lsblk", "-nro", "PKNAME", "--paths", mapping["device"]).stdout.strip()
+                require(disk in self.state["devices"], "The partition helper returned a device outside the confirmed disks.")
+                if mapping["mountpoint"] == "/boot/efi":
+                    properties = self.run("udevadm", "info", "--query=property", "--name", mapping["device"]).stdout
+                    number = next((line.split("=", 1)[1] for line in properties.splitlines()
+                                   if line.startswith("ID_PART_ENTRY_NUMBER=")), "")
+                    require(number.isdigit(), "Cannot identify the EFI partition number.")
+                    self.run("parted", "--script", disk, "set", number, "esp", "on")
+            if encryption:
+                create_root(self, mappings, plan, secret)
+                secret = None
+            mount_filesystems(self, mappings)
+            self.state["mount_identity"] = self.mount_identity()
+            self.state["mount_identities"] = {point: self.mount_identity(Path(point))
+                                              for point in self.state["owned_mounts"]}
+            self.save("partitioned")
+        except Exception:
+            if encryption and self.state.get("owned_mappers"):
+                cleanup_partition_failure(self)
+            raise
+        finally:
+            secret = None
         self.progress(10)
 
     def copy(self) -> None:
@@ -452,6 +490,7 @@ class Backend:
                 self.save()
 
     def write_fstab(self) -> None:
+        from fedora_crypto import crypttab
         lines = ["# Generated by Fedora DDE Installer.\n"]
         for mapping in self.state["mounts"]:
             device, point = mapping["device"], mapping["mountpoint"]
@@ -468,7 +507,10 @@ class Backend:
                 check = ("1" if point == "/" else "2") if filesystem in {"ext2", "ext3", "ext4"} else "0"
                 lines.append(f"UUID={identifier}\t{point}\t{filesystem}\t{options}\t0 {check}\n")
         self.write("etc/fstab", "".join(lines))
-        self.write("etc/crypttab", "# No encrypted devices are configured by this installer.\n", 0o600)
+        if self.state.get("encrypted_root"):
+            root = next(item for item in self.state["mounts"] if item["mountpoint"] == "/")
+            self.state["encrypted_root"]["filesystem_uuid"] = root["uuid"]
+        self.write("etc/crypttab", crypttab(self.state), 0o600)
         self.save()
 
     def clean_live_settings(self) -> None:
@@ -591,9 +633,13 @@ class Backend:
         from fedora_profile import state_profile
         from fedora_system import console_font, console_keymap
 
-        self.load("awaiting-user", "configuring-user", "user-configured", "finalized")
+        self.load("awaiting-user", "configuring-user", "user-configured", "finalizing", "finalized")
         if self.state["phase"] == "finalized":
             return
+        if self.state["phase"] == "finalizing":
+            for key in SECRET_KEYS:
+                self.config.set(key, "")
+            return  # Filesystems may already be unmounted; only cleanup remains.
         self.verify_target()
         if self.state["phase"] == "user-configured":
             for key in SECRET_KEYS:
@@ -763,15 +809,19 @@ class Backend:
                             home + "/.config/locale.conf", capture=False)
 
     def finalize(self) -> None:
+        from fedora_crypto import close_owned_mappers, root_record
         from fedora_profile import selinux_disabled, state_profile
         from fedora_system import verify_selinux_config
 
-        self.load("user-configured", "finalized")
+        self.load("user-configured", "finalizing", "finalized")
         if self.state["phase"] == "finalized":
             self.config.set("DI_TARGET_STAGE", "complete")
             self.progress(100)
             return
-        self.verify_target()
+        if self.state["phase"] != "finalizing" or str(self.target) in self.state["owned_mounts"]:
+            self.verify_target()
+        require(self.state["phase"] != "finalizing" or self.state.get("summary_written"),
+                "Final cleanup cannot start before the installation summary was saved.")
         require(bool(self.state.get("user")), "Account setup has not completed.")
         for key in SECRET_KEYS:
             self.config.set(key, "")
@@ -783,6 +833,8 @@ class Backend:
                 "uefi": self.state["uefi"], "kernels": self.state.get("kernels", []),
                 "firmware_fallback": self.state.get("firmware_fallback", False),
                 "install_profile": state_profile(self.state),
+                "encryption": {"type": "luks2", "uuid": root_record(self.state)["uuid"]}
+                    if root_record(self.state) else None,
                 "keyboard": self.state.get("keyboard", {}), "status": "configured"}, indent=2) + "\n", 0o600)
             if not selinux_disabled(self.state):
                 self.chroot("restorecon", "-ir", "/var/log/fedora-dde-installer", capture=False)
@@ -791,6 +843,7 @@ class Backend:
             self.state["summary_written"] = True
             self.save()
         self.run("sync")
+        self.save("finalizing")
         # Only mounts made by this backend are released. Never use lazy/forced
         # unmount, swapoff -a, or kill processes belonging to the Live desktop.
         for mountpoint in list(reversed(self.state["owned_mounts"])):
@@ -798,6 +851,7 @@ class Backend:
                 self.run("umount", "--recursive", mountpoint)
             self.state["owned_mounts"].remove(mountpoint)
             self.save()
+        close_owned_mappers(self)
         self.save("finalized")
         self.config.set("DI_TARGET_STAGE", "complete")
         self.progress(100)
@@ -811,6 +865,7 @@ def main() -> int:
     os.umask(0o077)
     try:
         require(os.geteuid() == 0, "The installation backend must run as root.")
+        protect_process_secrets()
         runner = Runner()
         config = Config(Path("/run/fedora-dde-installer/installer.conf"), runner)
         config.require_private()

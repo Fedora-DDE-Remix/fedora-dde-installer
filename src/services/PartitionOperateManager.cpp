@@ -1,5 +1,6 @@
 #include "PartitionOperateManager.h"
 #include "CommonFunc.h"
+#include "EncryptionSecret.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -345,11 +346,13 @@ void PartitionOperateManager::editPartConf(const SPartitionInfo &in, const QList
 {
     if (in.partitionType != EPartitionType::PartitionTypeExtension) {
         for (SPartitionInfo it : infos) {
-            if (it == in && ((in.mountPoint != it.mountPoint) || (in.filesystem != it.filesystem) || (in.isCrypt != it.isCrypt)) ) {
+            if (it == in && ((in.mountPoint != it.mountPoint) || (in.filesystem != it.filesystem)
+                             || (in.isCrypt != it.isCrypt) || (in.isNeedFormat != it.isNeedFormat))) {
                 QJsonObject json = getOperateJsonObject(gEditOption, it);
                 jsons.append(json);
                 this->setOperateInfo(gEditOption, it);
-            } else if ((it == in) && (in.mountPoint == it.mountPoint) && (in.filesystem == it.filesystem) && (in.isCrypt == it.isCrypt)) {
+            } else if ((it == in) && (in.mountPoint == it.mountPoint) && (in.filesystem == it.filesystem)
+                       && (in.isCrypt == it.isCrypt) && (in.isNeedFormat == it.isNeedFormat)) {
                 QJsonObject json = getOperateJsonObject(gNormalOption, it);
                 jsons.append(json);
             }
@@ -453,6 +456,8 @@ void PartitionOperateManager::setOperateInfo(const QString &op, const SPartition
 {
     QString partLabel = in.label.isEmpty() ? in.path : in.label;
     QString partFileSystem = in.filesystem;
+    if (in.isCrypt)
+        partFileSystem = ::QObject::tr("LUKS2 encrypted %1").arg(in.filesystem);
     if (in.isBiosBoot)
         partFileSystem = ::QObject::tr("BIOS boot (no filesystem)");
     if (partFileSystem.isEmpty()) {
@@ -576,7 +581,6 @@ QJsonObject PartitionOperateManager::getOperateJsonObject(const QString &oper, c
     json.insert("mountPoint", in.mountPoint);
     json.insert("isneedformat", in.isNeedFormat);
     json.insert("isCrypt", in.isCrypt);
-    json.insert("cryptPassword", in.cryptPassword);
     json.insert("isCryptHeader", in.isCryptHeader);
 
     return json;
@@ -605,7 +609,6 @@ QJsonObject PartitionOperateManager::getOperateJsonObject(const QString &oper, c
     json.insert("isneedformat", in.isNeedFormat);
     json.insert("isBiosBoot", in.isBiosBoot);
     json.insert("isCrypt", in.isCrypt);
-    json.insert("cryptPassword", in.cryptPassword);
     json.insert("isCryptHeader", in.isCryptHeader);
     json.insert("isNeedCryptHeader", in.isNeedCryptHeader);
     json.insert("partUuid", in.partUuid);
@@ -710,6 +713,7 @@ void PartitionOperateManager::resetDisk(const SDeviceInfo &dev)
 
 void PartitionOperateManager::resetDisk()
 {
+    EncryptionSecret::clear();
     m_currentDeviceInfo = m_availableDeviceInfo;
     this->resetVGDevice();
 }

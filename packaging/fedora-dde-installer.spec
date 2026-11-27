@@ -1,5 +1,5 @@
 Name:           fedora-dde-installer
-Version:        0.2.2
+Version:        0.3.0
 Release:        0.1%{?dist}
 Summary:        Fedora DDE Remix graphical Live installer
 License:        GPL-3.0-or-later
@@ -42,6 +42,8 @@ Requires:       sudo
 Requires:       polkit
 Requires:       dracut
 Requires:       dracut-config-rescue
+Requires:       cryptsetup
+Requires:       systemd-cryptsetup
 Requires:       grub2-tools
 Requires:       grub2-tools-extra
 Requires:       grubby
@@ -122,6 +124,12 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_unitdir}/%{name}.service
 
 %changelog
+* Fri Nov 27 2026 Fedora DDE Remix contributors - 0.3.0-0.1
+- Add password-only LUKS2 installation for Btrfs, ext4 and XFS roots.
+- Keep encryption secrets in sealed anonymous descriptors and reject plaintext data mounts.
+- Generate and verify crypttab and initramfs, and close owned mappings on completion.
+- Reserve encryption metadata while retaining payload-aware small-disk checks.
+
 * Thu Nov 26 2026 Fedora DDE Remix contributors - 0.2.2-0.1
 - Replace conservative disk limits with payload-aware checks and a 12 GiB root floor.
 - Check retained filesystems before partitioning and actual free space before copying.

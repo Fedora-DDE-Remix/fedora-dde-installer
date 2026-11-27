@@ -135,6 +135,9 @@ def validate_capacity(plan: list[dict], budgets: dict) -> None:
     require(set(mounts) == set(budgets), "The partition space budget does not match the confirmed plan.")
     for point, item in mounts.items():
         available = capacity(item)
+        if item.get("isCrypt"):
+            from fedora_crypto import LUKS_HEADER_BYTES
+            available -= LUKS_HEADER_BYTES
         required = max(budgets[point]["required_bytes"], ROOT_FLOOR if point == "/" else 0)
         require(available >= required,
                 f"The {point} partition needs at least {required / GIB:.2f} GiB for this image and free-space reserve; "

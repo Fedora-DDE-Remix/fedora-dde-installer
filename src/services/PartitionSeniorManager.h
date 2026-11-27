@@ -63,6 +63,8 @@ public:
     bool existVGName(const QString &vgName);
     // 检查分区是否满足系统安装的条件
     bool checkPartition(QString &log);
+    bool setRootEncryption(bool enabled, QString &error);
+    bool rootEncryptionEnabled() const;
     //
     bool checkGhostPartition(QString &err);
     // 查找磁盘的第一个引导分区

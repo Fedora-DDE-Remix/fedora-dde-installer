@@ -8,6 +8,8 @@
 #include "PartitionCustomManager.h"
 #include "PartitionSeniorManager.h"
 #include "FormatDiskTipsDialog.h"
+#include "EncryptionPasswordDialog.h"
+#include "EncryptionSecret.h"
 
 #include <QHBoxLayout>
 #include <QScroller>
@@ -50,6 +52,8 @@ CustomPartitionFrame::CustomPartitionFrame(const QMap<SDeviceInfo, QList<SPartit
                     free = PartitionSeniorManager::instance()->getEmptyDiskPartition(dev);
                 }
                 qint64 systemMinSpace = PartitionCustomManager::instance()->getSystemMinSpace(dev);
+                if (m_encryptRoot->isChecked())
+                    systemMinSpace += EncryptionSecret::MetadataMiB;
                 qint64 dataMinSpace = 0; // /home shares Btrfs space unless a separate partition is requested.
                 // 可自定义分区的最小空间要大于等于系统空间和数据空间最小值之和
                 if (free.size >= (systemMinSpace + dataMinSpace)) {
@@ -123,6 +127,23 @@ CustomPartitionFrame::CustomPartitionFrame(const QMap<SDeviceInfo, QList<SPartit
     listLayout->setContentsMargins(0, 0, 0, 0);
     listLayout->addLayout(viewLayout);
 
+    m_encryptRoot = new DCheckBox(this);
+    m_encryptionTip = new DLabel(this);
+    m_encryptionTip->setWordWrap(true);
+    m_encryptionTip->setMaximumWidth(CommonFunc::isBigScreen() ? 980 : 680);
+    m_encryptionTip->hide();
+    listLayout->addWidget(m_encryptRoot, 0, Qt::AlignHCenter);
+    listLayout->addWidget(m_encryptionTip, 0, Qt::AlignHCenter);
+    connect(m_encryptRoot, &DCheckBox::toggled, this, [this](bool checked) {
+        m_encryptionTip->setVisible(checked);
+        EncryptionSecret::clear();
+        if (!checked) {
+            QString error;
+            PartitionSeniorManager::instance()->setRootEncryption(false, error);
+            updateInstallInfo(PartitionCustomManager::instance()->getSystemPartitionInfo(), {});
+        }
+    });
+
     m_tipLabel = new DLabel(this);
     m_tipLabel->setAlignment(Qt::AlignCenter);
     m_tipLabel->setFixedSize(600, 40);
@@ -154,11 +175,17 @@ CustomPartitionFrame::CustomPartitionFrame(const QMap<SDeviceInfo, QList<SPartit
     connect(m_nextBtn, &DSuggestButton::clicked, this, [=] {
         QString log;
         SPartitionInfo bootloader;
-        if (!PartitionCustomManager::instance()->checkPartition(log)) {
+        if (!PartitionSeniorManager::instance()->setRootEncryption(m_encryptRoot->isChecked(), log)
+                || !PartitionCustomManager::instance()->checkPartition(log)) {
             this->updateTips(log);
         } else if (!PartitionCustomManager::instance()->findFirstESP(bootloader)) {
             this->updateTips(QString(::QObject::tr("The %1 boot partition must be a primary partition and the first partition on the disk")).arg(bootloader.mountPoint));
         } else {
+            if (m_encryptRoot->isChecked()) {
+                EncryptionPasswordDialog password(this);
+                if (password.exec() != QDialog::Accepted)
+                    return;
+            }
             Q_EMIT this->next();
         } });
     QHBoxLayout *okLayout = new QHBoxLayout;
@@ -207,10 +234,14 @@ void CustomPartitionFrame::updateTs()
     m_titleWidget->setTipsLabelProperty(::QObject::tr("Choose a disk partition to install the system, while the data on other partitions will be preserved."), "font-size:16px;font-weight:Medium;");
 
     m_nextBtn->setText(::QObject::tr("Next"));
+    m_encryptRoot->setText(::QObject::tr("Encrypt the root filesystem (LUKS2)"));
+    m_encryptionTip->setText(::QObject::tr("Keep /home and other personal data inside the encrypted root; separate data and swap partitions are not supported with encryption. /boot and the EFI System Partition remain unencrypted. A passphrase is required at every start."));
 }
 
 void CustomPartitionFrame::initDeviceInfo(const QMap<SDeviceInfo, QList<SPartitionInfo>> &devs, const QMap<SVGInfo, QList<SLVMInfo>> &vgs)
 {
+    EncryptionSecret::clear();
+    m_encryptRoot->setChecked(PartitionSeniorManager::instance()->rootEncryptionEnabled());
     updateInstallInfo(devs, vgs);
     updateTips("");
 }

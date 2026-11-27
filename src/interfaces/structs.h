@@ -111,7 +111,6 @@ struct SPartitionInfo
         json.insert("label", this->label);
         json.insert("device", this->device);
         json.insert("path", this->path);
-        json.insert("cryptPassword", this->cryptPassword);
         json.insert("index", this->index);
         json.insert("isStartPoint", this->isStartPoint);
         json.insert("deviceSize", QString::number(this->deviceSize));
@@ -197,7 +196,6 @@ struct SLVMInfo
         json.insert("size", QString::number(this->size));
         json.insert("byteSize", QString::number(this->byteSize));
         json.insert("vgName", this->vgName);
-        json.insert("cryptPassword", this->cryptPassword);
         switch (this->usage) {
             case ESpaceUsage::FREE:
                 json.insert("usage", "FREE");

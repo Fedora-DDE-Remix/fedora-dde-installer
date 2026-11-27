@@ -93,6 +93,7 @@ def _uuid(mapping: dict) -> str:
 def kernel_arguments(backend) -> list[str]:
     """Rebuild storage arguments; only explicit hardware options survive Live."""
     from fedora_profile import selinux_disabled
+    from fedora_crypto import root_record
 
     if "live_kernel_cmdline" not in backend.state:
         backend.state["live_kernel_cmdline"] = Path("/proc/cmdline").read_text().strip()
@@ -108,6 +109,10 @@ def kernel_arguments(backend) -> list[str]:
             "FIPS installation is not implemented; boot this Live installer without fips=1.")
     root = next(item for item in backend.state["mounts"] if item["mountpoint"] == "/")
     arguments = [f"root=UUID={_uuid(root)}", "ro"]
+    encrypted = root_record(backend.state)
+    if encrypted:
+        require(not selinux_disabled(backend.state), "Encrypted boot requires Fedora SELinux Enforcing.")
+        arguments.append("rd.luks.uuid=luks-" + encrypted["uuid"])
     if root.get("fstype") == "btrfs":
         subvolumes = [option for option in root.get("options", "").split(",")
                       if option.startswith(("subvol=", "subvolid="))]
@@ -230,11 +235,18 @@ def _verify_bls(backend, relative: str, expected_arguments: list[str]) -> None:
 
 
 def install_kernels(backend) -> None:
+    from fedora_crypto import crypttab, root_record, verify_initramfs
     from fedora_profile import selinux_disabled
     from fedora_system import verify_selinux_config
 
     if selinux_disabled(backend.state):
         verify_selinux_config(backend.target, "disabled")
+    encrypted = root_record(backend.state)
+    if encrypted:
+        verify_selinux_config(backend.target, "enforcing")
+        require(backend.path("etc/crypttab").is_file()
+                and backend.path("etc/crypttab").read_text() == crypttab(backend.state),
+                "Write the password-only encrypted root crypttab before generating initramfs.")
     arguments = kernel_arguments(backend)
     options = " ".join(arguments)
     # Write the defaults before cmdline: Fedora's 20-grub.install compares their mtimes.
@@ -245,7 +257,8 @@ def install_kernels(backend) -> None:
     backend.write("etc/kernel/cmdline", options + "\n")
     # Use the target Fedora hostonly defaults. Only omit modules used by the Live medium.
     backend.write("etc/dracut.conf.d/90-fedora-dde-installer.conf",
-                  'omit_dracutmodules+=" dmsquash-live livenet "\n')
+                  'omit_dracutmodules+=" dmsquash-live livenet "\n'
+                  + ('add_dracutmodules+=" crypt systemd-cryptsetup "\ninstall_items+=" /etc/crypttab "\n' if encrypted else ""))
     machine_id = _machine_id(backend)
     images = _kernel_images(backend)
     default_version, default_image = next((item for item in images if "+debug" not in item[0]), images[0])
@@ -276,11 +289,13 @@ def install_kernels(backend) -> None:
         _file(backend, f"boot/vmlinuz-{version}")
         _file(backend, f"boot/initramfs-{version}.img")
         _verify_bls(backend, f"boot/loader/entries/{machine_id}-{version}.conf", arguments)
+        verify_initramfs(backend, f"boot/initramfs-{version}.img")
         if version not in installed:
             installed.append(version)
     # dracut-config-rescue's 51 hook owns rescue creation and its BLS entry.
     # A zero exit code without those files must never count as an installed system.
     _verify_bls(backend, f"boot/loader/entries/{machine_id}-0-rescue.conf", arguments)
+    verify_initramfs(backend, f"boot/initramfs-0-rescue-{machine_id}.img")
     backend.chroot("grubby", "--set-default", f"/boot/vmlinuz-{default_version}")
     backend.state.update(kernels=installed, kernel_options=options, default_kernel=default_version)
     backend.save()

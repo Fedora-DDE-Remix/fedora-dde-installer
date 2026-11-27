@@ -272,6 +272,12 @@ QList<SPartitionInfo> PartitionFullDiskManager::getSystemPartitionConfig(const S
 
             // Full-disk installation creates GPT in both firmware modes.
             info.partitionType = EPartitionType::PartitionTypePrimary;
+            // Only the root filesystem is encrypted. Btrfs root/home share
+            // this container; ESP, BIOS boot and /boot remain directly usable.
+            info.isCrypt = dev.isCrypt && info.mountPoint == "/";
+            info.cryptPassword.clear();
+            info.isNeedCryptHeader = false;
+            info.isCryptHeader = false;
 
             if (total <= 0) {
                 err = QString("The %1 disk space is insufficient. Check the configuration file again full_disk_policy.json")

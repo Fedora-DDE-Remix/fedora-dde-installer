@@ -1,5 +1,6 @@
 #include "PartitionTaskManager.h"
 #include "CommonFunc.h"
+#include "EncryptionSecret.h"
 
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -23,6 +24,73 @@ PartitionTaskManager *PartitionTaskManager::instance()
     if(m_instance == nullptr)
         m_instance = new PartitionTaskManager();
     return m_instance;
+}
+
+bool PartitionTaskManager::validateEncryptionPlan(const QString &conf, QString &error)
+{
+    QJsonDocument document;
+    if (!CommonFunc::readJsonFile(conf, document, error))
+        return false;
+    if (CommonFunc::getSettingsBool("DI_USE_HIDE_CRYPT_HEADER")) {
+        error = "Detached encryption headers are not supported by the Fedora LUKS2 installer";
+        return false;
+    }
+    int encryptedRoots = 0;
+    QStringList selectedMounts;
+    bool physicalSwap = false;
+    for (const auto &value : document.array()) {
+        const auto item = value.toObject();
+        if (!item.value("cryptPassword").toString().isEmpty()) {
+            error = "Passphrases must never be stored in a partition plan";
+            return false;
+        }
+        const QString operation = item.value("operate").toString();
+        if (operation != "new" && operation != "edit")
+            continue;
+        if (item.value("isCryptHeader").toBool() || item.value("isNeedCryptHeader").toBool()) {
+            error = "Detached encryption headers are not supported by the Fedora LUKS2 installer";
+            return false;
+        }
+        if (item.value("type").toString() != "partition") {
+            if (item.value("isCrypt").toBool()) {
+                error = "Encryption is supported only on a root partition";
+                return false;
+            }
+            continue;
+        }
+        const QString mount = item.value("mountPoint").toString();
+        const QString filesystem = item.value("filesystem").toString();
+        if (!mount.isEmpty())
+            selectedMounts.append(mount);
+        physicalSwap = physicalSwap || gSwapFileSystems.contains(filesystem);
+        if (!item.value("isCrypt").toBool())
+            continue;
+        if (mount != "/" || !QStringList{"btrfs", "ext4", "xfs"}.contains(filesystem)
+                || !item.value("isneedformat").toBool() || item.value("isBiosBoot").toBool()
+                || item.value("size").toVariant().toLongLong()
+                   < CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG") + EncryptionSecret::MetadataMiB) {
+            error = "LUKS2 requires a formatted root partition with space reserved for its metadata";
+            return false;
+        }
+        ++encryptedRoots;
+    }
+    if (encryptedRoots > 1) {
+        error = "Only one encrypted root partition is supported";
+        return false;
+    }
+    if (encryptedRoots) {
+        for (const auto &mount : selectedMounts) {
+            if (!QStringList{"/", "/boot", "/boot/efi"}.contains(mount)) {
+                error = "Encrypted installation keeps all data mounts inside the root filesystem";
+                return false;
+            }
+        }
+        if (physicalSwap) {
+            error = "Encrypted installation uses zram instead of a separate swap partition";
+            return false;
+        }
+    }
+    return true;
 }
 
 bool PartitionTaskManager::getDeviceOperator(const QString &conf, QList<SDeviceOperate> &infos, QString &error)

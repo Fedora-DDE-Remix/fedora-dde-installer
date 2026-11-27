@@ -2479,6 +2479,86 @@ Root and /home share Btrfs space unless /home is separate.
         <source>Swap uses zram by default. An on-disk swap partition is optional.</source>
         <translation>默认使用 zram 交换空间，磁盘交换分区可选。</translation>
     </message>
+    <message>
+        <source>Use a passphrase of 8 to 1024 UTF-8 bytes without line breaks.</source>
+        <translation>口令的 UTF-8 编码长度须为 8 至 1024 字节，且不能包含换行。</translation>
+    </message>
+    <message>
+        <source>Could not keep the encryption passphrase in protected memory. Please try again.</source>
+        <translation>无法将加密口令保存在受保护的内存中，请重试。</translation>
+    </message>
+    <message>
+        <source>Could not pass the encryption key to the installation process.</source>
+        <translation>无法将加密密钥传递给安装进程。</translation>
+    </message>
+    <message>
+        <source>Could not start the installation process.</source>
+        <translation>无法启动安装进程。</translation>
+    </message>
+    <message>
+        <source>Encrypt the installed system</source>
+        <translation>加密安装后的系统</translation>
+    </message>
+    <message>
+        <source>System and personal files will be encrypted. The EFI System Partition and /boot remain unencrypted so the computer can start. Enter this passphrase each time you start the installed system.</source>
+        <translation>系统和个人文件将被加密。EFI 系统分区和 /boot 用于启动计算机，不加密。每次启动安装后的系统时，都需要输入此口令。</translation>
+    </message>
+    <message>
+        <source>Encryption passphrase</source>
+        <translation>加密口令</translation>
+    </message>
+    <message>
+        <source>Confirm passphrase</source>
+        <translation>确认口令</translation>
+    </message>
+    <message>
+        <source>Keep the passphrase safe. It is separate from your login password; losing it means losing access to the encrypted files.</source>
+        <translation>请妥善保管加密口令。它与登录密码相互独立；遗失口令后，将无法访问加密文件。</translation>
+    </message>
+    <message>
+        <source>The passphrases do not match.</source>
+        <translation>两次输入的口令不一致。</translation>
+    </message>
+    <message>
+        <source>Encrypt system</source>
+        <translation>加密系统</translation>
+    </message>
+    <message>
+        <source>Choose exactly one root partition before enabling encryption.</source>
+        <translation>启用加密前，请选择且仅选择一个根分区。</translation>
+    </message>
+    <message>
+        <source>Encrypted installation keeps personal files inside the root filesystem. Remove separate data and swap mount points, or turn off encryption. zram remains available.</source>
+        <translation>加密安装要求个人文件保存在根文件系统中。请取消独立数据分区和交换分区，或关闭加密。系统仍使用 zram 提供交换空间。</translation>
+    </message>
+    <message>
+        <source>LUKS2 encryption requires a freshly formatted Btrfs, ext4 or XFS root partition. Boot partitions cannot be encrypted.</source>
+        <translation>LUKS2 加密需要新格式化的 Btrfs、ext4 或 XFS 根分区。启动分区不能加密。</translation>
+    </message>
+    <message>
+        <source>The encrypted root partition needs at least %1 GiB for files plus 32 MiB for LUKS2 metadata.</source>
+        <translation>加密根分区需要至少 %1 GiB 文件空间，并额外预留 32 MiB 存放 LUKS2 元数据。</translation>
+    </message>
+    <message>
+        <source>Encrypt the root filesystem (LUKS2)</source>
+        <translation>加密根文件系统（LUKS2）</translation>
+    </message>
+    <message>
+        <source>Keep /home and other personal data inside the encrypted root; separate data and swap partitions are not supported with encryption. /boot and the EFI System Partition remain unencrypted. A passphrase is required at every start.</source>
+        <translation>请将 /home 和其他个人数据保存在加密根分区中；加密安装不支持独立的数据分区或交换分区。/boot 和 EFI 系统分区不加密。每次开机均需输入加密口令。</translation>
+    </message>
+    <message>
+        <source>System encryption (LUKS2)</source>
+        <translation>系统加密（LUKS2）</translation>
+    </message>
+    <message>
+        <source>Reserve an additional 32 MiB in the root partition for LUKS2 metadata.</source>
+        <translation>请在根分区额外预留 32 MiB 存放 LUKS2 元数据。</translation>
+    </message>
+    <message>
+        <source>LUKS2 encrypted %1</source>
+        <translation>LUKS2 加密的 %1</translation>
+    </message>
 </context>
 <context>
     <name>SelectFileWidget</name>

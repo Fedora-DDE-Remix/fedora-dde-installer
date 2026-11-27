@@ -27,6 +27,9 @@
 #include <QTimer>
 #include <DTitlebar>
 #include <DDialog>
+#include <cstdio>
+#include <sys/prctl.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 
 
@@ -35,6 +38,16 @@ DCORE_USE_NAMESPACE
 
 int main(int argc, char* argv[]) {
     umask(0077);
+    // Password widgets can hold transient plaintext before it reaches the
+    // sealed descriptor. Disable dumps before constructing any GUI object.
+    // PR_SET_DUMPABLE also covers pipe-based systemd-coredump handlers, which
+    // can ignore RLIMIT_CORE. This does not promise erasure of all RAM copies.
+    const struct rlimit coreLimit = {0, 0};
+    if (setrlimit(RLIMIT_CORE, &coreLimit) != 0
+            || prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) != 0) {
+        std::fprintf(stderr, "Fedora DDE Installer: cannot disable password-bearing process dumps.\n");
+        return 1;
+    }
 
     //for qt5platform-plugins load DPlatformIntegration or DPlatformIntegrationParent
     if (!QString(qgetenv("XDG_CURRENT_DESKTOP")).toLower().startsWith("deepin")){

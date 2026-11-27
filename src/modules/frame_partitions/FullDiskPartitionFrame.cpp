@@ -7,10 +7,10 @@
 #include "PartitionOperateManager.h"
 #include "PartitionFullDiskManager.h"
 #include "PartitionSeniorManager.h"
-#include "PasswdDialog.h"
+#include "EncryptionPasswordDialog.h"
+#include "EncryptionSecret.h"
 #include "CommonFunc.h"
 #include "DiskDeviceButton.h"
-#include "PasswdDialog.h"
 #include "SizeEditDialog.h"
 #include "HelpDialog.h"
 #include "FormatDiskTipsDialog.h"
@@ -92,7 +92,7 @@ void FullDiskPartitionFrame::updateTs()
 
     int spacinValue = m_btnDefault->style()->pixelMetric(QStyle::PM_LayoutHorizontalSpacing);
     m_btnDefault->setText(CommonFunc::wrapWords(tr("Default"), m_btnDefault->width() - m_btnDefault->iconSize().width() - spacinValue, m_btnDefault->fontMetrics()));
-    m_btnEncrypt->setText(CommonFunc::wrapWords(tr("Encrypt disk"), m_btnEncrypt->width() - m_btnEncrypt->iconSize().width() - spacinValue, m_btnEncrypt->fontMetrics()));
+    m_btnEncrypt->setText(CommonFunc::wrapWords(::QObject::tr("Encrypt system"), m_btnEncrypt->width() - m_btnEncrypt->iconSize().width() - spacinValue, m_btnEncrypt->fontMetrics()));
     m_btnExtand->setText(CommonFunc::wrapWords(tr("Enable Volume Extension"), m_btnExtand->width() - m_btnExtand->iconSize().width() - spacinValue, m_btnExtand->fontMetrics()));
     m_btnKeepData->setText(CommonFunc::wrapWords(tr("keep user data"), m_btnKeepData->width() - m_btnKeepData->iconSize().width() - spacinValue, m_btnKeepData->fontMetrics()));
 
@@ -106,7 +106,7 @@ void FullDiskPartitionFrame::updateTs()
     m_modeTip_1->setText(tr("Creates boot partitions and a compressed Btrfs filesystem. Root and /home share the remaining space. Swap uses zram. All data on the selected disk will be erased."));
     m_modeTip_1->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     m_modeTip_1->adjustSize();
-    m_modeTip_2->setText(::QObject::tr("Encrypt the whole disk to prevent data theft."));
+    m_modeTip_2->setText(::QObject::tr("System and personal files will be encrypted. The EFI System Partition and /boot remain unencrypted so the computer can start. Enter this passphrase each time you start the installed system."));
     m_modeTip_2->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Expanding);
     m_modeTip_2->adjustSize();
     m_modeTip_3->setText(::QObject::tr("By enabling it, LVM will be used to manage partitions for your system "
@@ -122,7 +122,7 @@ void FullDiskPartitionFrame::updateTs()
     m_modeTip_5->adjustSize();
 
     m_btnDefault->addHelpText(tr("Default"), m_modeTip_1->text());
-    m_btnEncrypt->addHelpText(tr("Encrypt disk"), m_modeTip_2->text());
+    m_btnEncrypt->addHelpText(::QObject::tr("Encrypt system"), m_modeTip_2->text());
     m_btnExtand->addHelpText(tr("Enable Volume Extension"), m_modeTip_3->text());
     m_btnKeepData->addHelpText(tr("keep user data"), m_modeTip_4->text());
 
@@ -143,17 +143,22 @@ void FullDiskPartitionFrame::onNextBtnClicked()
     if (!checkDiskSpace())
         return;
     QString error;
-    CommonFunc::setSettingsValue("DI_CRYPT_PASSWORD", "");
+    EncryptionSecret::clear();
     CommonFunc::setSettingsValue("DI_OLD_USERNAME_LIST", "");
     PartitionFullDiskManager::instance()->setPartitionMode(FullDiskMode);
     PartitionFullDiskManager::instance()->resetDisk();
     SDeviceInfo device = m_dev;
-    device.isCrypt = false;
+    device.isCrypt = m_btnEncrypt->isChecked();
     device.isCreateCryptHeader = false;
     if (!PartitionFullDiskManager::instance()->addSystemDisk(device, error)
             || !PartitionSeniorManager::instance()->checkPartition(error)) {
         m_tipLabel->setText(error);
         return;
+    }
+    if (device.isCrypt) {
+        EncryptionPasswordDialog password(this);
+        if (password.exec() != QDialog::Accepted)
+            return;
     }
     Q_EMIT next();
 }
@@ -295,8 +300,6 @@ void FullDiskPartitionFrame::initContent()
     m_installLabel->setFixedWidth(CENTER_WIDTH);
     DFrame *modeFrame = new DFrame;
     modeFrame->setLineWidth(0);
-    modeFrame->hide();
-    m_installLabel->hide();
     modeFrame->setFixedWidth(CENTER_WIDTH);
     modeFrame->setMinimumHeight(60);
     modeFrame->setBackgroundRole(DPalette::ItemBackground);
@@ -305,8 +308,6 @@ void FullDiskPartitionFrame::initContent()
     modeFrame->setLayout(modeLayout);
     m_btnDefault = new HelpRadioButton;
     m_btnEncrypt = new HelpRadioButton;
-    m_btnEncrypt->hide();
-    m_btnEncrypt->setEnabled(false);
     m_btnExtand = new HelpRadioButton;
     m_btnExtand->hide();
     m_btnExtand->setEnabled(false);
@@ -315,7 +316,7 @@ void FullDiskPartitionFrame::initContent()
     m_btnKeepData->setEnabled(false);
     m_modeGroup = new QButtonGroup;
     m_btnDefault->setFixedWidth(120);
-    m_btnEncrypt->setFixedWidth(120);
+    m_btnEncrypt->setFixedWidth(200);
     m_btnExtand->setFixedWidth(160);
     m_btnKeepData->setFixedWidth(160);
     m_modeGroup->addButton(m_btnDefault, 1);
@@ -399,7 +400,12 @@ void FullDiskPartitionFrame::initContent()
 
 void FullDiskPartitionFrame::initConnection()
 {
-    // The Fedora layout uses all remaining space for a writable root filesystem.
+    connect(m_btnEncrypt, &QAbstractButton::toggled, this, [this](bool encrypted) {
+        m_modeTip_1->setVisible(!encrypted);
+        m_modeTip_2->setVisible(encrypted);
+        EncryptionSecret::clear();
+        m_contentWidget->adjustSize();
+    });
 }
 
 void FullDiskPartitionFrame::resetToDefaultSize()
@@ -414,6 +420,7 @@ void FullDiskPartitionFrame::resetToDefaultSize()
 
 void FullDiskPartitionFrame::initDiskData(const QList<SDeviceInfo> &devs)
 {
+    EncryptionSecret::clear();
     if(devs.size() != 1) {
         qCritical() << "FullDiskPartitionFrame has more then one disk input";
     }

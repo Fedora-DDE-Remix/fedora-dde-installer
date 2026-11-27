@@ -1,4 +1,5 @@
 #include "PartitionNavFrame.h"
+#include "EncryptionSecret.h"
 #include "OptionButton.h"
 #include "TitleWidget.h"
 #include "globals.h"
@@ -525,7 +526,7 @@ void PartitionNavFrame::initBtnConnect(const OptionButton &pOptionButton)
             }
         }
 
-        CommonFunc::setSettingsValue("DI_CRYPT_PASSWORD", "");
+        EncryptionSecret::clear();
         if (!FULLDISK_PARTTION_BTN.compare(pOptionButton.objectName())) {
             if(CommonFunc::isGhost()) {
                 SDeviceInfo imgDev;

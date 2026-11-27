@@ -1,4 +1,5 @@
 #include "PartitionSeniorManager.h"
+#include "EncryptionSecret.h"
 #include "PartitionOperateManager.h"
 #include "CommonFunc.h"
 #include <QSet>
@@ -265,7 +266,7 @@ void PartitionSeniorManager::newPartition(const SDeviceInfo &devName, const SPar
         SPartitionInfo in = free;
         in.id = QUuid::createUuid().toString();
         in.isCrypt = part.isCrypt;
-        in.cryptPassword = part.cryptPassword;
+        in.cryptPassword.clear();
         in.usage = ESpaceUsage::USE;
         in.partitionType = part.partitionType;
         in.size = part.size;
@@ -381,6 +382,8 @@ void PartitionSeniorManager::editPartition(const SDeviceInfo &devName, SPartitio
         curOpPart.path = part.path;
         curOpPart.isEFIPartition = (part.mountPoint == "/boot/efi");
         curOpPart.isBiosBoot = part.isBiosBoot;
+        curOpPart.isCrypt = part.isCrypt && part.mountPoint == "/";
+        curOpPart.cryptPassword.clear();
         bool canEncrypt = curOpPart.isNeedFormat && isPartitionCanEncrypt(curOpPart);
         curOpPart.isCanCrypt = canEncrypt && getCurrentEncryptStatus(curOpPart.id);
         if(canEncrypt) {
@@ -761,11 +764,55 @@ bool PartitionSeniorManager::existVGName(const QString &vgName)
     return false;
 }
 
+bool PartitionSeniorManager::rootEncryptionEnabled() const
+{
+    const auto devices = PartitionOperateManager::instance()->getCurrentDeviceInfo();
+    for (const auto &partitions : devices) {
+        for (const auto &partition : partitions) {
+            if (partition.usage == ESpaceUsage::USE && partition.mountPoint == "/" && partition.isCrypt)
+                return true;
+        }
+    }
+    return false;
+}
+
+bool PartitionSeniorManager::setRootEncryption(bool enabled, QString &error)
+{
+    auto devices = PartitionOperateManager::instance()->getCurrentDeviceInfo();
+    int roots = 0;
+    for (const auto &partitions : devices) {
+        for (const auto &partition : partitions) {
+            if (partition.usage == ESpaceUsage::USE && partition.mountPoint == "/")
+                ++roots;
+        }
+    }
+    if (enabled && roots != 1) {
+        error = ::QObject::tr("Choose exactly one root partition before enabling encryption.");
+        return false;
+    }
+    for (auto device = devices.begin(); device != devices.end(); ++device) {
+        for (auto &partition : device.value()) {
+            if (partition.usage == ESpaceUsage::USE && partition.mountPoint == "/") {
+                partition.isCrypt = enabled;
+                partition.cryptPassword.clear();
+                partition.isCryptHeader = false;
+                partition.isNeedCryptHeader = false;
+            }
+        }
+        PartitionOperateManager::instance()->updateDeviceInfo(device.key(), device.value());
+    }
+    if (!enabled)
+        EncryptionSecret::clear();
+    error.clear();
+    return true;
+}
+
 bool PartitionSeniorManager::checkPartition(QString &log)
 {
     bool efi = false;
     bool boot = false;
     qint64 rootSize = 0;
+    const bool encryptedRoot = rootEncryptionEnabled();
     QSet<QString> selectedDevices;
     const auto devices = PartitionOperateManager::instance()->getCurrentDeviceInfo();
     for (auto device = devices.cbegin(); device != devices.cend(); ++device) {
@@ -780,13 +827,28 @@ bool PartitionSeniorManager::checkPartition(QString &log)
                 }
                 biosBoot = true;
             }
-            if (partition.usage != ESpaceUsage::USE || partition.mountPoint.isEmpty())
+            if (partition.usage != ESpaceUsage::USE)
+                continue;
+            if (encryptedRoot && gSwapFileSystems.contains(partition.filesystem) && partition.isNeedFormat) {
+                log = ::QObject::tr("Encrypted installation keeps personal files inside the root filesystem. Remove separate data and swap mount points, or turn off encryption. zram remains available.");
+                return false;
+            }
+            if (partition.mountPoint.isEmpty())
                 continue;
             selected = true;
             selectedDevices.insert(device.key().device);
-            if (partition.isCrypt || !partition.cryptPassword.isEmpty()
-                    || partition.mountPoint == "/persistent") {
+            if (!partition.cryptPassword.isEmpty() || partition.mountPoint == "/persistent") {
                 log = ::QObject::tr("Choose ordinary writable partitions for Fedora DDE Remix.");
+                return false;
+            }
+            if (partition.isCrypt && (partition.mountPoint != "/" || !partition.isNeedFormat
+                    || !QStringList{"btrfs", "ext4", "xfs"}.contains(partition.filesystem)
+                    || partition.isCryptHeader || partition.isNeedCryptHeader)) {
+                log = ::QObject::tr("LUKS2 encryption requires a freshly formatted Btrfs, ext4 or XFS root partition. Boot partitions cannot be encrypted.");
+                return false;
+            }
+            if (encryptedRoot && !QStringList{"/", "/boot", "/boot/efi"}.contains(partition.mountPoint)) {
+                log = ::QObject::tr("Encrypted installation keeps personal files inside the root filesystem. Remove separate data and swap mount points, or turn off encryption. zram remains available.");
                 return false;
             }
             if (partition.mountPoint == "/") {
@@ -794,7 +856,7 @@ bool PartitionSeniorManager::checkPartition(QString &log)
                     log = ::QObject::tr("Select formatting for the root partition.");
                     return false;
                 }
-                rootSize = partition.size;
+                rootSize = partition.size - (partition.isCrypt ? EncryptionSecret::MetadataMiB : 0);
             }
             if (partition.mountPoint == "/boot")
                 boot = partition.filesystem == "ext4" && partition.isNeedFormat;
@@ -826,7 +888,9 @@ bool PartitionSeniorManager::checkPartition(QString &log)
     }
     const qint64 minimum = CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG");
     if (rootSize < minimum) {
-        log = ::QObject::tr("The root partition must have at least %1 GiB.").arg(minimum / giDeviceUnitSize);
+        log = encryptedRoot
+                ? ::QObject::tr("The encrypted root partition needs at least %1 GiB for files plus 32 MiB for LUKS2 metadata.").arg(minimum / giDeviceUnitSize)
+                : ::QObject::tr("The root partition must have at least %1 GiB.").arg(minimum / giDeviceUnitSize);
         return false;
     }
     return true;
@@ -1188,8 +1252,14 @@ bool PartitionSeniorManager::checkDialogNextEnable(const SPartitionInfo &info, Q
         return true;
     }
     const QStringList supported = {"ext4", "xfs", "btrfs", "vfat", "linux-swap", "swap"};
-    if (!supported.contains(info.filesystem) || info.isCrypt || info.mountPoint == "/persistent") {
+    if (!supported.contains(info.filesystem) || info.mountPoint == "/persistent") {
         err = ::QObject::tr("Choose a supported filesystem on an ordinary writable partition.");
+        return false;
+    }
+    if (info.isCrypt && (info.mountPoint != "/" || !info.isNeedFormat
+            || !QStringList{"btrfs", "ext4", "xfs"}.contains(info.filesystem)
+            || !info.cryptPassword.isEmpty() || info.isCryptHeader || info.isNeedCryptHeader)) {
+        err = ::QObject::tr("LUKS2 encryption requires a freshly formatted Btrfs, ext4 or XFS root partition. Boot partitions cannot be encrypted.");
         return false;
     }
     const QString splitChar = "、";
@@ -1232,6 +1302,8 @@ bool PartitionSeniorManager::checkDialogNextEnable(const SPartitionInfo &info, Q
     double showSize = 0.0;
     if ("/" == info.mountPoint) {
         minSize = CommonFunc::getSettingsInt("DI_ROOTA_SIZE_CONFIG");
+        if (info.isCrypt)
+            minSize += EncryptionSecret::MetadataMiB;
 
     } else if ("/boot" == info.mountPoint) {
         minSize = CommonFunc::getSettingsInt("DI_BOOT_SIZE_CONFIG");
@@ -1245,7 +1317,7 @@ bool PartitionSeniorManager::checkDialogNextEnable(const SPartitionInfo &info, Q
 
     showSize = minSize;
     QString showUnit = CommonFunc::showSizeUnit(showSize);
-    if(info.size < minSize && qAbs(minSize - info.size) > gPartitionDelta) {
+    if(info.size < minSize && (info.isCrypt || qAbs(minSize - info.size) > gPartitionDelta)) {
         err = sizeTip.arg(info.mountPoint, QString("%1%2").arg(QString::number(showSize), showUnit));
         return false;
     }
@@ -1498,15 +1570,8 @@ void PartitionSeniorManager::resetMountPoint(const QString &mountPoint)
 
 bool PartitionSeniorManager::isPartitionCanEncrypt(const SPartitionInfo &partInfo)
 {
-    static const QStringList fsEnableList = {"ext3", "ext4"};
-    if(partInfo.mountPoint == "/boot/efi" ||
-        partInfo.mountPoint == "/boot" ||
-        partInfo.mountPoint == "/" ||
-        !fsEnableList.contains(partInfo.filesystem)) {
-        return false;
-    }
-
-    return true;
+    return partInfo.mountPoint == "/" && !partInfo.isBiosBoot
+            && QStringList{"btrfs", "ext4", "xfs"}.contains(partInfo.filesystem);
 }
 
 bool PartitionSeniorManager::isPartitionCanEncrypt(const SLVMInfo &lvmInfo)
@@ -1651,16 +1716,22 @@ SLVMInfo PartitionSeniorManager::findLV(const QString &id)
 
 void PartitionSeniorManager::updateEncryptStatus(const QString &partId, const QString &pwd, bool bAutoDecrypt, bool bEncrypt)
 {
-    //qInfo() << "update device crypt info begin:";
+    Q_UNUSED(pwd);
+    Q_UNUSED(bAutoDecrypt);
+    // This legacy entry point is retained only for deletion/reset callers.
+    // New encryption is chosen through setRootEncryption and the sealed key
+    // dialog, never by storing a passphrase in a partition model.
+    if (bEncrypt)
+        return;
+    EncryptionSecret::clear();
     auto devInfos = getSystemPartitionInfo();
     auto lvmInfos = getSystemLVMInfo();
-    QString encryptPwd = bEncrypt ? pwd : "";
 
     for (auto &dev: devInfos.keys()) {
         for (auto &partInfo: devInfos[dev]) {
             if(partInfo.id == partId) {
                 partInfo.isCrypt = bEncrypt;
-                partInfo.cryptPassword = encryptPwd;
+                partInfo.cryptPassword.clear();
             } else if (isInCryptList(partInfo.id)) {
                 partInfo.isCanCrypt = !bEncrypt;
             }
@@ -1673,7 +1744,7 @@ void PartitionSeniorManager::updateEncryptStatus(const QString &partId, const QS
         for (auto &lvm: lvmInfos[vg]) {
             if(lvm.id == partId) {
                 lvm.isCrypt = bEncrypt;
-                lvm.cryptPassword = encryptPwd;
+                lvm.cryptPassword.clear();
             } else if (isInCryptList(lvm.id)) {
                 lvm.isCanCrypt = !bEncrypt;
             }
@@ -1682,8 +1753,6 @@ void PartitionSeniorManager::updateEncryptStatus(const QString &partId, const QS
         PartitionOperateManager::instance()->updateLVMInfo(vg, lvmInfos[vg]);
     }
 
-    CommonFunc::setSettingsValue("DI_IS_AUTO_DECRYPT", bEncrypt ? bAutoDecrypt : false);
-    CommonFunc::setSettingsValue("DI_CRYPT_PASSWORD", encryptPwd);
     m_encryptPart = qMakePair(bEncrypt, partId);
     //qInfo() << "update device crypt info end";
 }
@@ -1695,6 +1764,7 @@ bool PartitionSeniorManager::isInCryptList(const QString &partId)
 
 void PartitionSeniorManager::clearCryptList()
 {
+    EncryptionSecret::clear();
     m_encryptPart.first = false;
     m_encryptPart.second.clear();
     m_cryptCandidateList.clear();

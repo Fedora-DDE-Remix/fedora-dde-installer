@@ -2,6 +2,7 @@
 #include "globals.h"
 #include "Process.h"
 #include "LibpartedManager.h"
+#include "EncryptionSecret.h"
 
 #include <QUuid>
 #include <QFileInfo>
@@ -10,11 +11,13 @@
 #include <QJsonArray>
 #include <QDebug>
 #include <QDir>
+#include <unistd.h>
 #include <QThread>
 #include <QBitmap>
 #include <QPainter>
 #include <QWidget>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <iostream>
 #include <QCryptographicHash>
 #include <QImageReader>
@@ -197,6 +200,10 @@ int CommonFunc::getSettingsInt(const QString &key, const QString &section, const
 
 void CommonFunc::setSettingsValue(const QString &key, const QVariant &value, const QString &section, const QString &filePath)
 {
+    // A stale plugin must not be able to restore the former password-in-INI
+    // protocol. Only EncryptionSecret may hold an installation passphrase.
+    if (key == "DI_CRYPT_PASSWORD")
+        return;
     QString path(filePath);
 
     if (!path.isEmpty() && !QFileInfo::exists(path)) {
@@ -432,7 +439,7 @@ bool CommonFunc::bindRecoveryKeyToDev(const QString &diskPwd, const QStringList 
 
 bool CommonFunc::isCryptDisk()
 {
-    return !getSettingsString("DI_CRYPT_PASSWORD").isEmpty();
+    return EncryptionSecret::available();
 }
 
 LanguageList CommonFunc::getLanguageList()
@@ -705,9 +712,39 @@ bool CommonFunc::getSettingsPolicy(QJsonDocument &policyDoc, QString &error)
 
 bool CommonFunc::execHook(const QString &hooksPath, QString &log)
 {
-    // 由于后端脚本都是bash语法，故修改shell解释器为bash
-    return commandPrintLog("/usr/bin/bash", QStringList()
-                   << QString("%1/%2").arg(getSystemEnv(DI_INSTALL_TOOLS_DIR_ENV), gHooksManagerScript) << hooksPath, log);
+    const QString tools = getSystemEnv(DI_INSTALL_TOOLS_DIR_ENV);
+    const bool preflight = hooksPath == tools + "/hooks/before_chroot/00_preflight.job";
+    const bool partition = hooksPath == tools + "/hooks/before_chroot/10_partition.job";
+    Process process;
+    process.setProgram("/usr/bin/bash");
+    process.setArguments({QString("%1/%2").arg(tools, gHooksManagerScript), hooksPath});
+    auto environment = QProcessEnvironment::systemEnvironment();
+    environment.remove("FEDORA_DDE_CRYPT_FD");
+    process.setProcessEnvironment(environment);
+    int keyFd = -1;
+    if (preflight || partition) {
+        keyFd = EncryptionSecret::prepareProcess(process, log);
+        if (!log.isEmpty()) {
+            EncryptionSecret::clear();
+            return false;
+        }
+    }
+    process.start();
+    bool ok = process.waitForStarted();
+    if (ok) {
+        ok = process.waitForFinished(-1) && process.exitStatus() == QProcess::NormalExit
+                && process.exitCode() == 0;
+        log = ok ? process.readAllStandardOutput() : process.readAllStandardError();
+    } else {
+        log = QObject::tr("Could not start the installation process.");
+    }
+    if (keyFd >= 0)
+        ::close(keyFd);
+    // Preflight and partition are separate hook processes. Retain the sealed
+    // descriptor between them, then release it before copying/configuration.
+    if (!ok || partition)
+        EncryptionSecret::clear();
+    return ok;
 }
 
 bool CommonFunc::command(const QString cmd, const QStringList &args, QString &log)
@@ -1073,7 +1110,7 @@ bool CommonFunc::editPartition(SPartitionInfo &info, QString &err)
                    .arg(info.path);
     }
 
-    if (info.isNeedFormat) {
+    if (info.isNeedFormat && !info.isCrypt) {
         if (!formatPartitionOK(info, err)) {
             return false;
         }
@@ -1137,7 +1174,7 @@ bool CommonFunc::creatPartition(SPartitionInfo &info, QString &err)
         return false;
     }
 
-    if (info.partitionType != EPartitionType::PartitionTypeExtension && info.isNeedFormat) {
+    if (info.partitionType != EPartitionType::PartitionTypeExtension && info.isNeedFormat && !info.isCrypt) {
         if (!formatPartitionOK(info, err)) {
             return false;
         }
@@ -1238,9 +1275,8 @@ bool CommonFunc::formatPartition(SPartitionInfo &info, QString &err)
         }
 
         if (key == gCryptoLuksFileSystem) {
-            if (!CommonFunc::cryptsetupPartition(QByteArray::fromBase64(CommonFunc::getSettingsString("DI_CRYPT_PASSWORD").toLocal8Bit()), info.label, info.path, err)) {
-                return false;
-            }
+            err = "LUKS2 creation must use the Fedora backend and its anonymous key descriptor";
+            return false;
         } else if (key == gLVM2PVFileSystem){
             if (!CommonFunc::createPV(info.path, err)) {
                 return false;
@@ -1282,6 +1318,10 @@ bool CommonFunc::formatPartition(SPartitionInfo &info, QString &err)
 
 bool CommonFunc::formatPartitionOK(SPartitionInfo &info, QString &err)
 {
+    if (info.isCrypt) {
+        err = "Encrypted roots must be formatted by the LUKS2 backend, never on the raw partition";
+        return false;
+    }
     if (info.isBiosBoot) {
         err = "The BIOS boot partition must not be formatted";
         return false;
