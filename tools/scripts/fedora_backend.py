@@ -222,10 +222,13 @@ class Config:
 class Backend:
     def __init__(self, config: Config, runner: Runner, target: Path = TARGET,
                  state_dir: Path = STATE_DIR, boot_id: str | None = None):
+        from fedora_namespace import namespace_identity
+
         self.config, self.runner = config, runner
         self.target, self.state_dir = target, state_dir
         self.state_file = state_dir / "state.json"
         self.boot_id = boot_id or Path("/proc/sys/kernel/random/boot_id").read_text().strip()
+        self.mount_namespace = namespace_identity()
         self.state: dict = {}
 
     def run(self, *args: str, **kwargs) -> subprocess.CompletedProcess:
@@ -234,7 +237,7 @@ class Backend:
     def chroot(self, *args: str, **kwargs) -> subprocess.CompletedProcess:
         return self.run("chroot", str(self.target), *args, **kwargs)
 
-    def load(self, *phases: str) -> None:
+    def load(self, *phases: str, allow_finalized_namespace: bool = False) -> None:
         from fedora_profile import state_profile
 
         require(self.state_file.is_file() and not self.state_file.is_symlink(),
@@ -242,6 +245,11 @@ class Backend:
         self.state = json.loads(self.state_file.read_text())
         require(self.state.get("boot_id") == self.boot_id and self.state.get("target") == str(self.target),
                 "The installation target belongs to a different session.")
+        finished = (allow_finalized_namespace and self.state.get("phase") == "finalized"
+                    and not self.state.get("owned_mounts") and not self.state.get("owned_mappers"))
+        require(self.state.get("mount_namespace") == self.mount_namespace or finished,
+                "The installation belongs to another mount namespace. Keep the original installer session "
+                "open for retries; if it has exited, restart the Live system before installing again.")
         state_profile(self.state)
         if phases:
             require(self.state.get("phase") in phases,
@@ -250,6 +258,7 @@ class Backend:
     def save(self, phase: str | None = None) -> None:
         if phase:
             self.state["phase"] = phase
+        self.state.setdefault("mount_namespace", self.mount_namespace)
         self.state_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
         require(not self.state_dir.is_symlink(), "The state directory must not be a symlink.")
         os.chmod(self.state_dir, 0o700)
@@ -328,7 +337,7 @@ class Backend:
         from fedora_profile import selinux_disabled
         from fedora_storage import validate_layout
         if self.state_file.exists():
-            self.load()
+            self.load(allow_finalized_namespace=True)
             require(self.state.get("phase") in {"preflight", "source-validation-failed", "finalized"},
                     "An installation is already active in this Live session.")
             if self.state.get("phase") in {"preflight", "source-validation-failed"}:
@@ -866,6 +875,8 @@ def main() -> int:
     try:
         require(os.geteuid() == 0, "The installation backend must run as root.")
         protect_process_secrets()
+        from fedora_namespace import verify_private_namespace
+        verify_private_namespace()
         runner = Runner()
         config = Config(Path("/run/fedora-dde-installer/installer.conf"), runner)
         config.require_private()

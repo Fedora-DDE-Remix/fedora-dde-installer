@@ -203,6 +203,57 @@ matrix includes UEFI/Btrfs on decimal 16 GB, BIOS/ext4 and UEFI/XFS encrypted
 installations. Inspect each new report: adding scenarios does not mean they
 have passed, and earlier unencrypted reports do not validate encryption.
 
+## Installation mount namespace
+
+Release `0.3.0-0.3` addresses the actual encrypted-finalize failure in
+[ISO diagnostic run 45996299589](https://github.com/Fedora-DDE-Remix/ISO-Build/actions/runs/45996299589).
+The installer's own mount table was empty after ordinary unmounts, but at least
+15 sampled system-service namespaces still contained the same Btrfs target and
+runtime bind mounts. The LUKS mapper consequently remained in use. The bounded
+sample reached its output cap, so it does not enumerate every possible holder.
+
+The core launcher now invokes the shipped `tools/scripts/fedora_namespace.py`
+executor before starting the long-lived GUI. It creates a new mount namespace,
+makes that new namespace recursively private, verifies its kernel identity and
+propagation metadata, then executes the GUI. Every hook inherits this namespace.
+PID 1 never receives the installation mounts, including mounts for source
+validation and temporary Btrfs preparation. Existing service namespaces and
+services started later therefore have no installation mounts to inherit.
+The executor does not change propagation in the Live host namespace.
+
+The GUI checks isolation before Qt initialization and device scanning. The
+backend checks it before reading installer configuration, records the actual
+namespace device/inode at preflight, and requires that identity for subsequent
+stages. It does not use an environment flag as proof, enter another process's
+namespace, or maintain a keeper daemon. Normal unmount and mapper-close success
+remain required; no forced, lazy or deferred cleanup is added.
+
+Privileged CLI automation must keep **all stages in one long-lived session**:
+
+```bash
+sudo /usr/bin/python3 -I \
+  /usr/share/fedora-dde-installer/tools/scripts/fedora_namespace.py \
+  --exec /bin/bash
+```
+
+Prepare the normal configuration and confirmed plan, then run all stages from
+that shell. Starting a new executor separately for each stage loses the shared
+mount environment and is rejected. Retries within the same GUI/shell remain
+supported. A new session cannot resume a nonfinalized state from another
+namespace; restart the Live system if the original session has exited.
+This boundary isolates mount visibility, not the actual selected disk writes.
+
+The safe-tests CI job additionally runs `tests/integration/test_mount_namespace.py`
+inside `sudo unshare --mount --propagation private`. That separate **real Linux
+kernel test** uses only disposable tmpfs/bind mounts and test-owned processes.
+A shared positive control proves that the observer detects propagation. The
+production executor must then keep its target/preparation/runtime mounts out of
+both a pre-existing observer and one created later from the simulated host,
+preserve one namespace across separate stage processes, and release mounts with
+ordinary unmounts. Its JSON evidence is uploaded on both success and failure.
+The test does not access block devices or the real `/target`; Fedora RPM/GUI and
+the exact ISO installation/disk-boot checks remain separate required evidence.
+
 ## Fedora Enforcing release profile
 
 The current release ISO places this explicit profile in its read-only payload:

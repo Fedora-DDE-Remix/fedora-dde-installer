@@ -25,6 +25,7 @@
 #include <DLog>
 #include <QScreen>
 #include <QTimer>
+#include <QProcess>
 #include <DTitlebar>
 #include <DDialog>
 #include <cstdio>
@@ -47,6 +48,25 @@ int main(int argc, char* argv[]) {
             || prctl(PR_SET_DUMPABLE, 0, 0, 0, 0) != 0) {
         std::fprintf(stderr, "Fedora DDE Installer: cannot disable password-bearing process dumps.\n");
         return 1;
+    }
+
+    // The launcher creates one private mount namespace for this long-lived
+    // GUI and every hook. Refuse direct host-namespace execution before Qt
+    // objects or device scanning can start an installation outside it.
+    {
+        QProcess namespaceCheck;
+        namespaceCheck.start(QStringLiteral("/usr/bin/python3"),
+                            {QStringLiteral("-I"),
+                             QStringLiteral("/usr/share/fedora-dde-installer/tools/scripts/fedora_namespace.py"),
+                             QStringLiteral("--check")});
+        if (!namespaceCheck.waitForStarted(5000) || !namespaceCheck.waitForFinished(10000)
+                || namespaceCheck.exitStatus() != QProcess::NormalExit || namespaceCheck.exitCode() != 0) {
+            namespaceCheck.kill();
+            namespaceCheck.waitForFinished(1000);
+            std::fprintf(stderr, "Fedora DDE Installer: start through fedora-dde-installer-launch "
+                                 "to create the private installation session.\n");
+            return 1;
+        }
     }
 
     //for qt5platform-plugins load DPlatformIntegration or DPlatformIntegrationParent

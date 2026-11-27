@@ -1,6 +1,6 @@
 Name:           fedora-dde-installer
 Version:        0.3.0
-Release:        0.2%{?dist}
+Release:        0.3%{?dist}
 Summary:        Fedora DDE Remix graphical Live installer
 License:        GPL-3.0-or-later
 URL:            https://github.com/Fedora-DDE-Remix/fedora-dde-installer
@@ -125,6 +125,10 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_unitdir}/%{name}.service
 
 %changelog
+* Fri Nov 27 2026 Fedora DDE Remix contributors - 0.3.0-0.3
+- Isolate installer mounts before mounting target filesystems and runtime binds.
+- Prevent target mounts leaking into Live service namespaces and holding LUKS open.
+
 * Fri Nov 27 2026 Fedora DDE Remix contributors - 0.3.0-0.2
 - Require Fedora's systemd-cryptsetup executable through its actual file provider.
 - Keep the cryptsetup CLI and systemd-udev dependencies for encrypted installation.

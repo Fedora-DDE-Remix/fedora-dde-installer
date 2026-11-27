@@ -70,6 +70,14 @@ payload 余量。安装使用 Argon2id 口令槽，生成基于 UUID 的 `/etc/c
 再关闭本次安装打开的 mapper。0.3.0 的加密安装实测结果以对应新镜像报告为准，
 旧版未加密安装报告不能证明这些新增路径通过。
 
+`0.3.0-0.3` 将整个 GUI 和全部安装阶段放入同一个私有挂载命名空间。Live 的系统
+服务看不到安装源、临时 Btrfs 挂载和 `/target`，安装完成时可以正常卸载这些挂载并
+关闭加密映射。后端同时核对保存的命名空间身份；直接在宿主环境运行后端会明确拒绝。
+正常安装仍在同一次 Live 启动中配置账户。若 GUI 异常退出并丢失原安装会话，应重启
+Live 环境后重新操作；新会话不会接管未完成的旧状态或自动重复分区。
+真实内核隔离、原生 RPM 和新 ISO 的验证结果仍需分别检查，见
+[构建与验证说明](docs/BUILDING.md#installation-mount-namespace)。
+
 ## 与 Fedora 官方安装结果对齐
 
 0.2.0 按 Fedora 45 Anaconda 45.30 的源码与 Fedora 包策略改进现有后端：
@@ -198,7 +206,7 @@ EROFS/SquashFS 或普通 Fedora Live 根镜像；不会把正在运行的 `/` �
 调试时显式指定的源也必须是独立只读挂载。默认 profile 要求 Live 内核启用
 SELinux，允许 permissive 模式，并要求已标记且配置为 enforcing 的 payload。
 
-### 本次测试 ISO：禁用 SELinux、保留 DDM 5
+### 历史调试配置：禁用 SELinux、保留 DDM 5
 
 ISO-Build 在原始只读 payload 中安装 root 拥有、其他用户不可写的
 `/etc/fedora-dde-installer/install-profile.json`：

@@ -31,6 +31,22 @@ jobs:
         run: cmake --build build-tests --parallel 2
       - name: Run non-destructive tests
         run: ctest --test-dir build-tests --output-on-failure
+      - name: Verify real installation mount namespace isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '{"schema":1,"test":"installer-mount-namespace","passed":false,"error":"The isolated test did not start or did not finish writing its report."}' \
+            > build-tests/mount-namespace-integration.json
+          sudo -n /usr/bin/unshare --mount --propagation private -- \
+            /usr/bin/python3 -I tests/integration/test_mount_namespace.py \
+            --report build-tests/mount-namespace-integration.json
+      - name: Save mount namespace integration evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-mount-namespace-integration
+          path: build-tests/mount-namespace-integration.json
+          if-no-files-found: warn
 
   fedora-rpm:
     name: Fedora 45 RPM (x86_64)
