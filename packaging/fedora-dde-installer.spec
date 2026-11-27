@@ -1,6 +1,6 @@
 Name:           fedora-dde-installer
 Version:        0.3.0
-Release:        0.1%{?dist}
+Release:        0.2%{?dist}
 Summary:        Fedora DDE Remix graphical Live installer
 License:        GPL-3.0-or-later
 URL:            https://github.com/Fedora-DDE-Remix/fedora-dde-installer
@@ -43,7 +43,8 @@ Requires:       polkit
 Requires:       dracut
 Requires:       dracut-config-rescue
 Requires:       cryptsetup
-Requires:       systemd-cryptsetup
+# Fedora 45 ships this executable in systemd-udev, not a separate subpackage.
+Requires:       /usr/bin/systemd-cryptsetup
 Requires:       grub2-tools
 Requires:       grub2-tools-extra
 Requires:       grubby
@@ -124,6 +125,10 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/%{name}.desktop
 %{_unitdir}/%{name}.service
 
 %changelog
+* Fri Nov 27 2026 Fedora DDE Remix contributors - 0.3.0-0.2
+- Require Fedora's systemd-cryptsetup executable through its actual file provider.
+- Keep the cryptsetup CLI and systemd-udev dependencies for encrypted installation.
+
 * Fri Nov 27 2026 Fedora DDE Remix contributors - 0.3.0-0.1
 - Add password-only LUKS2 installation for Btrfs, ext4 and XFS roots.
 - Keep encryption secrets in sealed anonymous descriptors and reject plaintext data mounts.

@@ -230,9 +230,9 @@ class CryptoTests(unittest.TestCase):
         self.assertEqual(self.backend.state["phase"], "preflight")
         self.assertEqual(self.runner.calls, [])
 
-    def test_encryption_preflight_requires_current_dracut_and_enforcing_payload(self):
+    def encryption_payload(self, cryptsetup_path="usr/bin/systemd-cryptsetup"):
         files = ("etc/selinux/config", "usr/sbin/cryptsetup", "usr/bin/lsinitrd",
-                 "usr/lib/dracut/modules.d/70crypt/module-setup.sh", "usr/lib/systemd/systemd-cryptsetup",
+                 "usr/lib/dracut/modules.d/70crypt/module-setup.sh", cryptsetup_path,
                  "usr/lib/dracut/modules.d/71systemd-cryptsetup/module-setup.sh",
                  "usr/lib/dracut/modules.d/11systemd-ask-password/module-setup.sh",
                  "usr/bin/systemd-ask-password", "usr/bin/systemd-tty-ask-password-agent",
@@ -241,6 +241,13 @@ class CryptoTests(unittest.TestCase):
             path = self.target / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("SELINUX=enforcing\n" if relative == "etc/selinux/config" else "fixture")
+            path.chmod(0o644 if relative == "etc/selinux/config" else 0o755)
+
+    def test_encryption_preflight_requires_current_dracut_and_enforcing_payload(self):
+        self.encryption_payload()
+        # Fedora 45 systemd-udev 262.1 installs the real program in /usr/bin
+        # and provides this relative symlink for dracut 111's old entry point.
+        (self.target / "usr/lib/systemd/systemd-cryptsetup").symlink_to("../../bin/systemd-cryptsetup")
         with mock.patch.object(crypto.shutil, "which", return_value="/usr/bin/utility"):
             crypto.verify_requirements(self.backend, self.target, plan(), {})
             module = self.target / "usr/lib/dracut/modules.d/71systemd-cryptsetup/module-setup.sh"
@@ -254,6 +261,32 @@ class CryptoTests(unittest.TestCase):
             from profile_fixtures import ISO_PROFILE
             with self.assertRaisesRegex(backend.InstallError, "Enforcing"):
                 crypto.verify_requirements(self.backend, self.target, plan(), {"install_profile": dict(ISO_PROFILE)})
+
+    def test_encryption_preflight_accepts_legacy_libexec_binary(self):
+        self.encryption_payload("usr/lib/systemd/systemd-cryptsetup")
+        with mock.patch.object(crypto.shutil, "which", return_value="/usr/bin/utility"):
+            crypto.verify_requirements(self.backend, self.target, plan(), {})
+
+    def test_encryption_preflight_rejects_missing_or_nonexecutable_unlock_components(self):
+        self.encryption_payload()
+        # A symlink must not hide a missing or non-executable real program.
+        (self.target / "usr/lib/systemd/systemd-cryptsetup").symlink_to("/usr/bin/systemd-cryptsetup")
+        files = ("usr/sbin/cryptsetup", "usr/bin/lsinitrd", "usr/bin/systemd-cryptsetup",
+                 "usr/lib/systemd/system-generators/systemd-cryptsetup-generator",
+                 "usr/bin/systemd-ask-password", "usr/bin/systemd-tty-ask-password-agent")
+        with mock.patch.object(crypto.shutil, "which", return_value="/usr/bin/utility"):
+            for relative in files:
+                path = self.target / relative
+                for missing in (False, True):
+                    with self.subTest(path=relative, missing=missing):
+                        if missing:
+                            path.unlink()
+                        else:
+                            path.chmod(0o644)
+                        with self.assertRaisesRegex(backend.InstallError, path.name):
+                            crypto.verify_requirements(self.backend, self.target, plan(), {})
+                        path.write_text("fixture")
+                        path.chmod(0o755)
 
     def test_helper_cannot_smuggle_plaintext_home_into_encrypted_install(self):
         mappings = self.mappings() + [{"device": "/dev/disk4", "mountpoint": "/home", "options": "defaults"}]

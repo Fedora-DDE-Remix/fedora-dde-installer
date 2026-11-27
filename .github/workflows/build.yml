@@ -70,6 +70,22 @@ jobs:
           git -c safe.directory="$PWD" archive --format=tar --prefix=fedora-dde-installer-main/ HEAD |
             gzip -n > rpmbuild/SOURCES/fedora-dde-installer-main.tar.gz
           rpmbuild --define "_topdir $PWD/rpmbuild" -ba packaging/fedora-dde-installer.spec
+      - name: Install the built RPM and verify Fedora encryption providers
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          packages=(rpmbuild/RPMS/x86_64/fedora-dde-installer-[0-9]*.rpm)
+          (( ${#packages[@]} == 1 ))
+          dnf -y install "${packages[0]}"
+          for path in /usr/bin/systemd-cryptsetup \
+                      /usr/lib/systemd/system-generators/systemd-cryptsetup-generator; do
+            test -f "$path" && test -x "$path"
+            test "$(rpm -qf --qf '%{NAME}' "$path")" = systemd-udev
+          done
+          /usr/bin/systemd-cryptsetup --help > /dev/null
+          rpm -q --qf '%{NAME}\t%{VERSION}-%{RELEASE}\t%{ARCH}\n' \
+            fedora-dde-installer cryptsetup systemd-udev
       - name: Save RPMs
         uses: actions/upload-artifact@v4
         with:

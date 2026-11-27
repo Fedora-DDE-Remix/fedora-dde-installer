@@ -34,6 +34,9 @@ REQUIRED_SEALS = (getattr(fcntl, "F_SEAL_SEAL", 1) | getattr(fcntl, "F_SEAL_SHRI
 LUKS_HEADER_BYTES = 32 * 1024 * 1024
 LUKS_OFFSET_SECTORS = LUKS_HEADER_BYTES // 512
 CRYPT_OPTIONS = "luks,x-initrd.attach"
+# systemd 262 installs the public executable in /usr/bin and retains the
+# libexec path as a compatibility symlink. Older Fedora payloads use libexec.
+SYSTEMD_CRYPTSETUP_PATHS = ("usr/bin/systemd-cryptsetup", "usr/lib/systemd/systemd-cryptsetup")
 
 
 def encrypted_root(plan: list[dict]) -> dict | None:
@@ -97,11 +100,18 @@ def verify_requirements(backend, source: Path, plan: list[dict], source_state: d
         return
     require(not selinux_disabled(source_state), "Encrypted installation requires Fedora SELinux Enforcing.")
     verify_selinux_config(source, "enforcing")
+
+    def executable(relative: str) -> bool:
+        # Resolve absolute and relative symlinks inside the payload, never the
+        # running Live root. A dangling compatibility symlink is insufficient.
+        path = target_path(source, relative)
+        return path.is_file() and bool(path.stat().st_mode & 0o111)
+
     for command in ("cryptsetup", "mkfs." + root["filesystem"]):
         require(shutil.which(command) is not None, f"The Live image is missing {command} for encrypted installation.")
     for command in ("cryptsetup", "lsinitrd", "systemd-ask-password", "systemd-tty-ask-password-agent"):
-        require(any(target_path(source, directory + command).is_file() for directory in ("usr/bin/", "usr/sbin/")),
-                f"The target payload must include {command} for encrypted boot.")
+        require(any(executable(directory + command) for directory in ("usr/bin/", "usr/sbin/")),
+                f"The target payload must include executable {command} for encrypted boot.")
     # Dracut 111 renumbered these modules (70crypt, 71systemd-cryptsetup,
     # 11systemd-ask-password). Check the exact module suffix, not a release's
     # numeric ordering. crypt alone does not install systemd's unlock service.
@@ -110,9 +120,10 @@ def verify_requirements(backend, source: Path, plan: list[dict], source_state: d
         require(any(target_path(source, str(path.relative_to(source))).is_file()
                     for path in modules.glob(f"[0-9][0-9]{module}/module-setup.sh")),
                 f"The target payload is missing dracut's {module} module.")
-    require(target_path(source, "usr/lib/systemd/systemd-cryptsetup").is_file()
-            and target_path(source, "usr/lib/systemd/system-generators/systemd-cryptsetup-generator").is_file(),
-            "The target payload must include systemd-cryptsetup for boot-time password entry.")
+    require(any(executable(path) for path in SYSTEMD_CRYPTSETUP_PATHS),
+            "The target payload must include executable systemd-cryptsetup for boot-time password entry.")
+    require(executable("usr/lib/systemd/system-generators/systemd-cryptsetup-generator"),
+            "The target payload must include executable systemd-cryptsetup-generator for boot-time password entry.")
 
 
 def _record_valid(record: dict) -> None:
@@ -288,10 +299,20 @@ def verify_initramfs(backend, relative: str) -> None:
     for module in ("crypt", "systemd-cryptsetup", "systemd-ask-password"):
         require(module in {line.strip() for line in modules}, f"The target initramfs lacks the {module} module.")
     listing = backend.chroot("lsinitrd", image).stdout
-    for path in ("usr/lib/systemd/systemd-cryptsetup",
-                 "usr/lib/systemd/system-generators/systemd-cryptsetup-generator",
-                 "usr/bin/systemd-ask-password", "usr/bin/systemd-tty-ask-password-agent",
-                 "usr/lib/systemd/system/systemd-ask-password-console.service"):
+
+    def executable(relative: str) -> bool:
+        # lsinitrd lists both a compatibility symlink and its real target. Only
+        # a regular file with an execute bit proves that the program is present.
+        pattern = r"(?m)^(-[rwxstST-]{9})\s+[^\n]*\s+(?:\./)?" + re.escape(relative) + r"$"
+        return any(any(match[1][index] in "xst" for index in (3, 6, 9))
+                   for match in re.finditer(pattern, listing))
+
+    require(any(executable(path) for path in SYSTEMD_CRYPTSETUP_PATHS),
+            "The target initramfs lacks the executable password unlock component systemd-cryptsetup.")
+    for path in ("usr/lib/systemd/system-generators/systemd-cryptsetup-generator",
+                 "usr/bin/systemd-ask-password", "usr/bin/systemd-tty-ask-password-agent"):
+        require(executable(path), f"The target initramfs lacks the executable password unlock component {path}.")
+    for path in ("usr/lib/systemd/system/systemd-ask-password-console.service",):
         require(re.search(r"(?m)(?:^|\s)(?:\./)?" + re.escape(path) + r"(?:\s+->\s+[^\n]*)?$", listing),
                 f"The target initramfs lacks the password unlock component {path}.")
     contents = backend.chroot("lsinitrd", "--file", "etc/crypttab", image).stdout

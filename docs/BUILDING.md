@@ -51,7 +51,7 @@ definitions at commit `c2a29af363a2c573d47bdb7809e01ab454c2f5d9`:
 
 `Dtk6Log` is listed explicitly in the installer SPEC because it is needed when
 loading the Core CMake package. The runtime also explicitly requires `udisks2`
-for the D-Bus disk service, `systemd-udev` for partition identification and
+for the D-Bus disk service, `systemd-udev` for partition identification and encrypted-root activation, and
 `efibootmgr` for UEFI boot entries. Resolving these packages still requires a
 successful build in the configured Fedora 45 COPR chroot.
 
@@ -174,9 +174,13 @@ as required free space, and preserved filesystems are not assumed empty.
 
 ## LUKS2 installation in 0.3.0
 
-The Live payload must include `cryptsetup`, `systemd-cryptsetup`, dracut's crypt
-module and the selected filesystem utilities. The installer RPM declares these
-dependencies. Supported new encrypted roots are Btrfs, ext4 and XFS. The ESP
+The Live payload must include the `cryptsetup` CLI, `/usr/bin/systemd-cryptsetup`,
+dracut's crypt module and the selected filesystem utilities. Fedora 45 supplies
+the systemd helper in [`systemd-udev`](https://packages.fedoraproject.org/pkgs/systemd/systemd-udev/fedora-45-updates.html)
+(verified with `262.1-1.fc45`). Installer release `0.3.0-0.2` requires the actual
+file `/usr/bin/systemd-cryptsetup`, correcting the unresolved package dependency
+`systemd-cryptsetup`; the existing `cryptsetup` and `systemd-udev` requirements
+remain. Supported new encrypted roots are Btrfs, ext4 and XFS. The ESP
 and separate ext4 `/boot` remain unencrypted; all user data stays within the
 single encrypted root. Separate home, var, data and disk swap mounts are rejected
 in encrypted mode before partitioning. Btrfs root/home subvolumes share the same
