@@ -1,6 +1,7 @@
 #include "PartitionTaskManager.h"
 #include "CommonFunc.h"
 #include "EncryptionSecret.h"
+#include "globals.h"
 
 #include <QFileInfo>
 #include <QJsonDocument>
